@@ -1,0 +1,104 @@
+services:
+  # PostgreSQL Database
+  db:
+    image: postgres:15-alpine
+    container_name: gravitee-quiz-db
+    environment:
+      POSTGRES_DB: gravitee_quiz
+      POSTGRES_USER: quiz_user
+      POSTGRES_PASSWORD: quiz_password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U quiz_user -d gravitee_quiz"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - quiz-network
+
+  # Backend API Server (Python FastAPI)
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: gravitee-quiz-backend
+    environment:
+      # API Configuration
+      BASE_PATH: ${BASE_PATH:-}  # e.g., /apidays2025/quiz or empty for root
+      # Database
+      DATABASE_URL: postgresql://quiz_user:quiz_password@db:5432/gravitee_quiz
+      # Security
+      SECRET_KEY: your-secret-key-change-in-production
+      # CORS - Add your production domains here
+      CORS_ORIGINS: http://localhost:8080,http://localhost:8081,http://localhost:8082
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - ./backend:/app
+    networks:
+      - quiz-network
+    restart: unless-stopped
+
+  # Game Client Frontend
+  game-client:
+    build:
+      context: .
+      dockerfile: game-client/Dockerfile
+    container_name: gravitee-quiz-game-client
+    environment:
+      # API URL for backend (injected into HTML at runtime)
+      API_BASE_URL: ${API_BASE_URL:-http://localhost:8000/api}
+    ports:
+      - "8080:80"
+    depends_on:
+      - backend
+    networks:
+      - quiz-network
+    restart: unless-stopped
+
+  # Admin Console Frontend
+  admin-console:
+    build:
+      context: .
+      dockerfile: admin-console/Dockerfile
+    container_name: gravitee-quiz-admin-console
+    environment:
+      # API URL for backend (injected into HTML at runtime)
+      API_BASE_URL: ${API_BASE_URL:-http://localhost:8000/api}
+    ports:
+      - "8081:80"
+    depends_on:
+      - backend
+    networks:
+      - quiz-network
+    restart: unless-stopped
+
+  # Scoreboard Display
+  scoreboard:
+    build:
+      context: .
+      dockerfile: scoreboard/Dockerfile
+    container_name: gravitee-quiz-scoreboard
+    environment:
+      # API URL for backend (injected into HTML at runtime)
+      API_BASE_URL: ${API_BASE_URL:-http://localhost:8000/api}
+    ports:
+      - "8082:80"
+    depends_on:
+      - backend
+    networks:
+      - quiz-network
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+
+networks:
+  quiz-network:
+    driver: bridge
