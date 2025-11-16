@@ -1,0 +1,838 @@
+/**
+ * Admin Console Main Application
+ */
+
+class AdminApp {
+    constructor() {
+        this.currentView = 'questions';
+        this.editingQuestion = null;
+        this.questions = []; // Store questions for filtering
+        this.allQuestions = []; // Store all questions before filtering
+        this.results = []; // Store results for sorting
+        this.allResults = []; // Store all results before filtering
+        this.sortColumn = 'id';
+        this.sortDirection = 'desc';
+        this.filters = {
+            search: '',
+            minScore: null,
+            maxScore: null
+        };
+        this.questionFilters = {
+            search: '',
+            type: '',
+            status: ''
+        };
+        this.init();
+    }
+    
+    init() {
+        console.log('Initializing Admin Console');
+        
+        // Check if already logged in
+        const token = localStorage.getItem('authToken');
+        if (token) {
+            this.showAdmin();
+        } else {
+            this.showLogin();
+        }
+        
+        this.setupEventListeners();
+    }
+    
+    setupEventListeners() {
+        // Login form
+        const loginForm = document.getElementById('loginForm');
+        if (loginForm) {
+            loginForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                await this.handleLogin();
+            });
+        }
+        
+        // Logout button
+        const logoutButton = document.getElementById('logoutButton');
+        if (logoutButton) {
+            logoutButton.addEventListener('click', async () => {
+                await this.handleLogout();
+            });
+        }
+        
+        // Navigation
+        document.querySelectorAll('.nav-link').forEach(link => {
+            link.addEventListener('click', (e) => {
+                e.preventDefault();
+                const view = link.getAttribute('data-view');
+                this.showView(view);
+            });
+        });
+        
+        // Questions view
+        document.getElementById('addQuestionButton')?.addEventListener('click', () => {
+            this.showQuestionModal();
+        });
+        
+        // Question filter listeners
+        document.getElementById('questionSearchInput')?.addEventListener('input', (e) => {
+            this.questionFilters.search = e.target.value.toLowerCase();
+            this.applyQuestionFilters();
+        });
+        
+        document.getElementById('questionTypeFilter')?.addEventListener('change', (e) => {
+            this.questionFilters.type = e.target.value;
+            this.applyQuestionFilters();
+        });
+        
+        document.getElementById('questionStatusFilter')?.addEventListener('change', (e) => {
+            this.questionFilters.status = e.target.value;
+            this.applyQuestionFilters();
+        });
+        
+        document.getElementById('clearQuestionFiltersButton')?.addEventListener('click', () => {
+            this.clearQuestionFilters();
+        });
+        
+        // Question modal
+        document.getElementById('closeModal')?.addEventListener('click', () => {
+            this.hideQuestionModal();
+        });
+        
+        document.getElementById('cancelModal')?.addEventListener('click', () => {
+            this.hideQuestionModal();
+        });
+        
+        document.getElementById('questionForm')?.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            await this.handleQuestionSubmit();
+        });
+        
+        // Results view
+        document.getElementById('refreshResultsButton')?.addEventListener('click', () => {
+            this.loadResults();
+        });
+        
+        // Filter listeners
+        document.getElementById('searchInput')?.addEventListener('input', (e) => {
+            this.filters.search = e.target.value.toLowerCase();
+            this.applyFilters();
+        });
+        
+        document.getElementById('minScore')?.addEventListener('input', (e) => {
+            this.filters.minScore = e.target.value ? parseInt(e.target.value) : null;
+            this.applyFilters();
+        });
+        
+        document.getElementById('maxScore')?.addEventListener('input', (e) => {
+            this.filters.maxScore = e.target.value ? parseInt(e.target.value) : null;
+            this.applyFilters();
+        });
+        
+        document.getElementById('clearFiltersButton')?.addEventListener('click', () => {
+            this.clearFilters();
+        });
+        
+        // Result modal
+        document.getElementById('closeResultModal')?.addEventListener('click', () => {
+            this.hideResultModal();
+        });
+        
+        // Settings form
+        document.getElementById('settingsForm')?.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            await this.handleSettingsSubmit();
+        });
+    }
+    
+    showLogin() {
+        document.getElementById('loginPage')?.classList.add('active');
+        document.getElementById('adminPage')?.classList.remove('active');
+    }
+    
+    showAdmin() {
+        document.getElementById('loginPage')?.classList.remove('active');
+        document.getElementById('adminPage')?.classList.add('active');
+        this.loadView(this.currentView);
+    }
+    
+    async handleLogin() {
+        const username = document.getElementById('username')?.value;
+        const password = document.getElementById('password')?.value;
+        const errorEl = document.getElementById('loginError');
+        
+        try {
+            this.setLoading(true);
+            await api.login(username, password);
+            errorEl.style.display = 'none';
+            this.showAdmin();
+        } catch (error) {
+            console.error('Login failed:', error);
+            errorEl.textContent = 'Invalid credentials. Please try again.';
+            errorEl.style.display = 'block';
+        } finally {
+            this.setLoading(false);
+        }
+    }
+    
+    async handleLogout() {
+        await api.logout();
+        this.showLogin();
+    }
+    
+    showView(viewName) {
+        this.currentView = viewName;
+        
+        // Update navigation
+        document.querySelectorAll('.nav-link').forEach(link => {
+            link.classList.remove('active');
+        });
+        document.querySelector(`.nav-link[data-view="${viewName}"]`)?.classList.add('active');
+        
+        // Show view
+        document.querySelectorAll('.content-view').forEach(view => {
+            view.classList.remove('active');
+        });
+        document.getElementById(`${viewName}View`)?.classList.add('active');
+        
+        // Load view data
+        this.loadView(viewName);
+    }
+    
+    async loadView(viewName) {
+        switch (viewName) {
+            case 'questions':
+                await this.loadQuestions();
+                break;
+            case 'results':
+                await this.loadResults();
+                break;
+            case 'settings':
+                await this.loadSettings();
+                break;
+        }
+    }
+    
+    // Questions Management
+    async loadQuestions() {
+        const tbody = document.getElementById('questionsTableBody');
+        if (!tbody) return;
+        
+        tbody.innerHTML = '<tr><td colspan="6" class="loading"><i class="ph ph-circle-notch ph-spin"></i> Loading questions...</td></tr>';
+        
+        try {
+            this.allQuestions = await api.getQuestions(true);
+            this.questions = [...this.allQuestions];
+            this.displayQuestions();
+        } catch (error) {
+            console.error('Failed to load questions:', error);
+            tbody.innerHTML = '<tr><td colspan="6" class="loading">Error loading questions</td></tr>';
+            this.showToast('Failed to load questions', 'error');
+        }
+    }
+    
+    applyQuestionFilters() {
+        let filtered = [...this.allQuestions];
+        
+        // Search filter
+        if (this.questionFilters.search) {
+            const search = this.questionFilters.search.toLowerCase();
+            filtered = filtered.filter(q => 
+                q.question_text_en.toLowerCase().includes(search) ||
+                q.question_text_fr.toLowerCase().includes(search)
+            );
+        }
+        
+        // Type filter
+        if (this.questionFilters.type) {
+            filtered = filtered.filter(q => q.question_type === this.questionFilters.type);
+        }
+        
+        // Status filter
+        if (this.questionFilters.status !== '') {
+            const isActive = this.questionFilters.status === 'active';
+            filtered = filtered.filter(q => q.is_active === isActive);
+        }
+        
+        this.questions = filtered;
+        this.displayQuestions();
+    }
+    
+    clearQuestionFilters() {
+        this.questionFilters = { search: '', type: '', status: '' };
+        document.getElementById('questionSearchInput').value = '';
+        document.getElementById('questionTypeFilter').value = '';
+        document.getElementById('questionStatusFilter').value = '';
+        this.questions = [...this.allQuestions];
+        this.displayQuestions();
+    }
+    
+    displayQuestions() {
+        const tbody = document.getElementById('questionsTableBody');
+        if (!tbody) return;
+        
+        if (this.questions.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="6" class="loading">No questions found</td></tr>';
+            return;
+        }
+        
+        tbody.innerHTML = '';
+        this.questions.forEach(q => {
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td>${q.id}</td>
+                <td>${q.question_text_en.substring(0, 60)}...</td>
+                <td>${q.question_type}</td>
+                <td>${q.correct_answer}</td>
+                <td><span class="status-badge ${q.is_active ? 'active' : 'inactive'}">${q.is_active ? 'Active' : 'Inactive'}</span></td>
+                <td class="action-buttons">
+                    <button class="btn btn-small btn-secondary" onclick="window.adminApp.editQuestion(${q.id})">
+                        <i class="ph ph-pencil"></i>
+                        Edit
+                    </button>
+                    <button class="btn btn-small btn-danger" onclick="window.adminApp.deleteQuestion(${q.id})">
+                        <i class="ph ph-trash"></i>
+                        Delete
+                    </button>
+                </td>
+            `;
+            tbody.appendChild(row);
+        });
+    }
+    
+    showQuestionModal(question = null) {
+        this.editingQuestion = question;
+        const modal = document.getElementById('questionModal');
+        const title = document.getElementById('modalTitle');
+        const form = document.getElementById('questionForm');
+        
+        if (question) {
+            title.textContent = 'Edit Question';
+            document.getElementById('questionId').value = question.id;
+            document.getElementById('questionTextEn').value = question.question_text_en;
+            document.getElementById('questionTextFr').value = question.question_text_fr;
+            document.getElementById('questionType').value = question.question_type;
+            document.getElementById('mediaUrl').value = question.media_url || '';
+            document.getElementById('correctAnswer').value = question.correct_answer;
+            document.getElementById('difficulty').value = question.difficulty;
+            document.getElementById('greenLabelEn').value = question.green_label_en;
+            document.getElementById('greenLabelFr').value = question.green_label_fr;
+            document.getElementById('redLabelEn').value = question.red_label_en;
+            document.getElementById('redLabelFr').value = question.red_label_fr;
+            document.getElementById('explanationEn').value = question.explanation_en || '';
+            document.getElementById('explanationFr').value = question.explanation_fr || '';
+            document.getElementById('isActive').checked = question.is_active;
+        } else {
+            title.textContent = 'Add Question';
+            form.reset();
+            document.getElementById('questionId').value = '';
+        }
+        
+        modal.style.display = 'flex';
+    }
+    
+    hideQuestionModal() {
+        document.getElementById('questionModal').style.display = 'none';
+        this.editingQuestion = null;
+    }
+    
+    async editQuestion(id) {
+        try {
+            this.setLoading(true);
+            const question = await api.getQuestion(id);
+            this.showQuestionModal(question);
+        } catch (error) {
+            console.error('Failed to load question:', error);
+            this.showToast('Failed to load question', 'error');
+        } finally {
+            this.setLoading(false);
+        }
+    }
+    
+    async handleQuestionSubmit() {
+        const form = document.getElementById('questionForm');
+        const formData = new FormData(form);
+        
+        const data = {
+            question_text_en: formData.get('question_text_en'),
+            question_text_fr: formData.get('question_text_fr'),
+            question_type: formData.get('question_type'),
+            media_url: formData.get('media_url') || null,
+            correct_answer: formData.get('correct_answer'),
+            difficulty: parseInt(formData.get('difficulty')),
+            green_label_en: formData.get('green_label_en'),
+            green_label_fr: formData.get('green_label_fr'),
+            red_label_en: formData.get('red_label_en'),
+            red_label_fr: formData.get('red_label_fr'),
+            explanation_en: formData.get('explanation_en') || null,
+            explanation_fr: formData.get('explanation_fr') || null,
+            is_active: formData.get('is_active') === 'on',
+        };
+        
+        try {
+            this.setLoading(true);
+            const questionId = document.getElementById('questionId').value;
+            
+            if (questionId) {
+                await api.updateQuestion(questionId, data);
+                this.showToast('Question updated successfully');
+            } else {
+                await api.createQuestion(data);
+                this.showToast('Question created successfully');
+            }
+            
+            this.hideQuestionModal();
+            await this.loadQuestions();
+        } catch (error) {
+            console.error('Failed to save question:', error);
+            this.showToast('Failed to save question', 'error');
+        } finally {
+            this.setLoading(false);
+        }
+    }
+    
+    async deleteQuestion(id) {
+        if (!confirm('Are you sure you want to delete this question?')) {
+            return;
+        }
+        
+        try {
+            this.setLoading(true);
+            await api.deleteQuestion(id);
+            this.showToast('Question deleted successfully');
+            await this.loadQuestions();
+        } catch (error) {
+            console.error('Failed to delete question:', error);
+            this.showToast('Failed to delete question', 'error');
+        } finally {
+            this.setLoading(false);
+        }
+    }
+    
+    // Results Management
+    async loadResults() {
+        const tbody = document.getElementById('resultsTableBody');
+        if (!tbody) return;
+        
+        tbody.innerHTML = '<tr><td colspan="8" class="loading">Loading...</td></tr>';
+        
+        try {
+            this.allResults = await api.getResults();
+            this.results = [...this.allResults]; // Start with all results
+            this.displayResults();
+        } catch (error) {
+            console.error('Failed to load results:', error);
+            tbody.innerHTML = '<tr><td colspan="8" class="loading">Error loading results</td></tr>';
+            this.showToast('Failed to load results', 'error');
+        }
+    }
+    
+    displayResults() {
+        const tbody = document.getElementById('resultsTableBody');
+        if (!tbody) return;
+        
+        if (this.results.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="8" class="loading">No results found</td></tr>';
+            return;
+        }
+        
+        // Sort results
+        const sorted = [...this.results].sort((a, b) => {
+            let aVal, bVal;
+            
+            switch(this.sortColumn) {
+                case 'id':
+                    aVal = a.id;
+                    bVal = b.id;
+                    break;
+                case 'player':
+                    aVal = `${a.player.first_name} ${a.player.last_name}`.toLowerCase();
+                    bVal = `${b.player.first_name} ${b.player.last_name}`.toLowerCase();
+                    break;
+                case 'score':
+                    aVal = a.total_score;
+                    bVal = b.total_score;
+                    break;
+                case 'correct':
+                    aVal = a.correct_answers;
+                    bVal = b.correct_answers;
+                    break;
+                case 'wrong':
+                    aVal = a.wrong_answers;
+                    bVal = b.wrong_answers;
+                    break;
+                case 'date':
+                    aVal = new Date(a.completed_at);
+                    bVal = new Date(b.completed_at);
+                    break;
+                default:
+                    return 0;
+            }
+            
+            if (aVal < bVal) return this.sortDirection === 'asc' ? -1 : 1;
+            if (aVal > bVal) return this.sortDirection === 'asc' ? 1 : -1;
+            return 0;
+        });
+        
+        tbody.innerHTML = '';
+        sorted.forEach(r => {
+            const row = document.createElement('tr');
+            const date = new Date(r.completed_at).toLocaleString();
+            row.innerHTML = `
+                <td>${r.id}</td>
+                <td>${r.player.first_name} ${r.player.last_name}</td>
+                <td>${r.player.email}</td>
+                <td><strong>${r.total_score}</strong></td>
+                <td>${r.correct_answers}</td>
+                <td>${r.wrong_answers}</td>
+                <td>${date}</td>
+                <td class="action-buttons">
+                    <button class="btn btn-small btn-secondary" onclick="window.adminApp.viewResult(${r.id})">
+                        <i class="ph ph-eye"></i>
+                        View
+                    </button>
+                    <button class="btn btn-small btn-danger" onclick="window.adminApp.deleteResult(${r.id})">
+                        <i class="ph ph-trash"></i>
+                        Delete
+                    </button>
+                </td>
+            `;
+            tbody.appendChild(row);
+        });
+    }
+    
+    sortResults(column) {
+        if (this.sortColumn === column) {
+            this.sortDirection = this.sortDirection === 'asc' ? 'desc' : 'asc';
+        } else {
+            this.sortColumn = column;
+            this.sortDirection = 'desc';
+        }
+        this.displayResults();
+        this.updateSortIndicators();
+    }
+    
+    updateSortIndicators() {
+        document.querySelectorAll('#resultsView th').forEach(th => {
+            th.classList.remove('sort-asc', 'sort-desc');
+        });
+        
+        const sortMap = {
+            'id': 0,
+            'player': 1,
+            'score': 3,
+            'correct': 4,
+            'wrong': 5,
+            'date': 6
+        };
+        
+        const thIndex = sortMap[this.sortColumn];
+        if (thIndex !== undefined) {
+            const th = document.querySelectorAll('#resultsView th')[thIndex];
+            if (th) {
+                th.classList.add(this.sortDirection === 'asc' ? 'sort-asc' : 'sort-desc');
+            }
+        }
+    }
+    
+    async viewResult(id) {
+        try {
+            this.setLoading(true);
+            const result = await api.getResult(id);
+            this.showResultModal(result);
+        } catch (error) {
+            console.error('Failed to load result:', error);
+            this.showToast('Failed to load result', 'error');
+        } finally {
+            this.setLoading(false);
+        }
+    }
+    
+    async showResultModal(result) {
+        const modal = document.getElementById('resultModal');
+        const details = document.getElementById('resultDetails');
+        
+        const date = new Date(result.completed_at).toLocaleString();
+        
+        // Fetch all questions to show question text
+        let questionsMap = {};
+        try {
+            const questions = await api.getQuestions(true);
+            questions.forEach(q => {
+                questionsMap[q.id] = q;
+            });
+        } catch (error) {
+            console.error('Failed to load questions:', error);
+        }
+        
+        let html = `
+            <div class="result-info">
+                <div class="result-info-header">
+                    <h4>Game Summary</h4>
+                    <button class="btn btn-small btn-primary" onclick="window.adminApp.editScore(${result.id})">
+                        <i class="ph ph-pencil"></i>
+                        Edit Score
+                    </button>
+                </div>
+                <div class="result-info-grid">
+                    <div class="result-info-item">
+                        <label>Player</label>
+                        <strong class="truncate-text">${result.player.first_name} ${result.player.last_name}</strong>
+                    </div>
+                    <div class="result-info-item">
+                        <label>Email</label>
+                        <strong class="truncate-text" title="${result.player.email}">${result.player.email}</strong>
+                    </div>
+                    <div class="result-info-item">
+                        <label>Total Score</label>
+                        <strong id="displayScore-${result.id}">${result.total_score}</strong>
+                    </div>
+                    <div class="result-info-item">
+                        <label>Correct</label>
+                        <strong>${result.correct_answers}</strong>
+                    </div>
+                    <div class="result-info-item">
+                        <label>Wrong</label>
+                        <strong>${result.wrong_answers}</strong>
+                    </div>
+                    <div class="result-info-item">
+                        <label>Unanswered</label>
+                        <strong>${result.unanswered}</strong>
+                    </div>
+                    <div class="result-info-item">
+                        <label>Completed</label>
+                        <strong>${date}</strong>
+                    </div>
+                </div>
+            </div>
+            <div class="result-answers">
+                <h4>Answers & Questions</h4>
+        `;
+        
+        result.answers.forEach((answer, index) => {
+            let className = 'answer-item';
+            if (answer.is_correct === true) className += ' correct';
+            else if (answer.is_correct === false) className += ' wrong';
+            else className += ' unanswered';
+            
+            const question = questionsMap[answer.question_id];
+            const questionText = question ? question.question_text_en : `Question ID: ${answer.question_id}`;
+            
+            // Get answer text with color indication
+            const greenText = question ? question.green_label_en : 'Green';
+            const redText = question ? question.red_label_en : 'Red';
+            
+            const playerAnswerText = answer.player_answer === 'green' ? 
+                `🟢 ${greenText}` : 
+                (answer.player_answer === 'red' ? `🔴 ${redText}` : 'None');
+            
+            const correctAnswerText = question ? 
+                (question.correct_answer === 'green' ? `🟢 ${greenText}` : `🔴 ${redText}`) : 
+                'N/A';
+            
+            html += `
+                <div class="${className}">
+                    <div class="answer-header">
+                        <strong>Question ${index + 1}</strong>
+                        <span class="answer-status">${answer.is_correct === true ? '✓ Correct' : answer.is_correct === false ? '✗ Wrong' : '- Unanswered'}</span>
+                    </div>
+                    <div class="answer-question">${questionText}</div>
+                    <div class="answer-details">
+                        <span><strong>Player Answer:</strong> ${playerAnswerText}</span>
+                        <span><strong>Correct Answer:</strong> ${correctAnswerText}</span>
+                        <span><strong>Points:</strong> ${answer.points_earned}</span>
+                        <span><strong>Time:</strong> ${answer.time_taken ? answer.time_taken.toFixed(2) + 's' : 'N/A'}</span>
+                    </div>
+                </div>
+            `;
+        });
+        
+        html += '</div>';
+        details.innerHTML = html;
+        modal.style.display = 'flex';
+    }
+    
+    hideResultModal() {
+        document.getElementById('resultModal').style.display = 'none';
+    }
+    
+    async deleteResult(id) {
+        if (!confirm('Are you sure you want to delete this result?')) {
+            return;
+        }
+        
+        try {
+            this.setLoading(true);
+            await api.deleteResult(id);
+            this.showToast('Result deleted successfully');
+            await this.loadResults();
+        } catch (error) {
+            console.error('Failed to delete result:', error);
+            this.showToast('Failed to delete result', 'error');
+        } finally {
+            this.setLoading(false);
+        }
+    }
+    
+    // Settings Management
+    async loadSettings() {
+        const form = document.getElementById('settingsForm');
+        if (!form) return;
+        
+        try {
+            const settings = await api.getSettings();
+            
+            document.getElementById('questionsPerGame').value = settings.questions_per_game;
+            document.getElementById('timerSeconds').value = settings.timer_seconds;
+            document.getElementById('pointsCorrect').value = settings.points_correct;
+            document.getElementById('pointsWrong').value = settings.points_wrong;
+            document.getElementById('timeBonusMax').value = settings.time_bonus_max;
+        } catch (error) {
+            console.error('Failed to load settings:', error);
+            this.showToast('Failed to load settings', 'error');
+        }
+    }
+    
+    async handleSettingsSubmit() {
+        const form = document.getElementById('settingsForm');
+        const formData = new FormData(form);
+        
+        const data = {
+            questions_per_game: parseInt(formData.get('questions_per_game')),
+            timer_seconds: parseInt(formData.get('timer_seconds')),
+            points_correct: parseInt(formData.get('points_correct')),
+            points_wrong: parseInt(formData.get('points_wrong')),
+            time_bonus_max: parseInt(formData.get('time_bonus_max')),
+        };
+        
+        try {
+            this.setLoading(true);
+            await api.updateSettings(data);
+            this.showToast('Settings updated successfully');
+        } catch (error) {
+            console.error('Failed to update settings:', error);
+            this.showToast('Failed to update settings', 'error');
+        } finally {
+            this.setLoading(false);
+        }
+    }
+    
+    // Utility functions
+    setLoading(isLoading) {
+        const overlay = document.getElementById('loadingOverlay');
+        if (overlay) {
+            overlay.style.display = isLoading ? 'flex' : 'none';
+        }
+    }
+    
+    showToast(message, type = 'success') {
+        const toast = document.getElementById('toast');
+        const messageEl = document.getElementById('toastMessage');
+        
+        if (toast && messageEl) {
+            messageEl.textContent = message;
+            toast.className = `toast ${type}`;
+            toast.style.display = 'block';
+            
+            setTimeout(() => {
+                toast.style.display = 'none';
+            }, 3000);
+        }
+    }
+    
+    applyFilters() {
+        // Start with all results
+        let filtered = [...this.allResults];
+        
+        // Apply search filter
+        if (this.filters.search) {
+            filtered = filtered.filter(r => {
+                const playerName = `${r.player.first_name} ${r.player.last_name}`.toLowerCase();
+                const email = r.player.email.toLowerCase();
+                return playerName.includes(this.filters.search) || email.includes(this.filters.search);
+            });
+        }
+        
+        // Apply score filters
+        if (this.filters.minScore !== null) {
+            filtered = filtered.filter(r => r.total_score >= this.filters.minScore);
+        }
+        
+        if (this.filters.maxScore !== null) {
+            filtered = filtered.filter(r => r.total_score <= this.filters.maxScore);
+        }
+        
+        // Update results and display
+        this.results = filtered;
+        this.displayResults();
+    }
+    
+    clearFilters() {
+        this.filters = {
+            search: '',
+            minScore: null,
+            maxScore: null
+        };
+        
+        // Clear input fields
+        const searchInput = document.getElementById('searchInput');
+        const minScoreInput = document.getElementById('minScore');
+        const maxScoreInput = document.getElementById('maxScore');
+        
+        if (searchInput) searchInput.value = '';
+        if (minScoreInput) minScoreInput.value = '';
+        if (maxScoreInput) maxScoreInput.value = '';
+        
+        // Reset to all results
+        this.results = [...this.allResults];
+        this.displayResults();
+    }
+    
+    async editScore(resultId) {
+        const result = this.results.find(r => r.id === resultId);
+        if (!result) return;
+        
+        const newScore = prompt(`Enter new score for ${result.player.first_name} ${result.player.last_name}:`, result.total_score);
+        
+        if (newScore === null) return; // User cancelled
+        
+        const score = parseInt(newScore);
+        if (isNaN(score) || score < 0) {
+            this.showToast('Invalid score value', 'error');
+            return;
+        }
+        
+        try {
+            this.setLoading(true);
+            
+            // Update via API
+            await api.updateScore(resultId, score);
+            
+            // Update local data
+            result.total_score = score;
+            const resultInAll = this.allResults.find(r => r.id === resultId);
+            if (resultInAll) {
+                resultInAll.total_score = score;
+            }
+            
+            // Update display in modal if open
+            const displayElement = document.getElementById(`displayScore-${resultId}`);
+            if (displayElement) {
+                displayElement.textContent = score;
+            }
+            
+            // Refresh results table
+            this.displayResults();
+            
+            this.showToast('Score updated successfully');
+        } catch (error) {
+            console.error('Failed to update score:', error);
+            this.showToast('Failed to update score', 'error');
+        } finally {
+            this.setLoading(false);
+        }
+    }
+}
+
+// Initialize app when DOM is ready
+document.addEventListener('DOMContentLoaded', () => {
+    console.log('DOM ready, starting admin app...');
+    window.adminApp = new AdminApp();
+});
