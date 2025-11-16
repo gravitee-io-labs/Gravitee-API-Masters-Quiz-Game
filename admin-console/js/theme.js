@@ -4,7 +4,7 @@
 
 class ThemeManager {
     constructor() {
-        this.currentTheme = localStorage.getItem('theme') || 'system';
+        this.currentTheme = localStorage.getItem('theme') || 'dark';
         this.init();
     }
     
