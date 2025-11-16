@@ -27,7 +27,7 @@ services:
     container_name: gravitee-quiz-backend
     environment:
       # API Configuration
-      BASE_PATH: ${BASE_PATH:-}  # e.g., /apidays2025/quiz or empty for root
+      BASE_PATH: ${BASE_PATH:-}  # e.g., /event-name/quiz or empty for root
       # Database
       DATABASE_URL: postgresql://quiz_user:quiz_password@db:5432/gravitee_quiz
       # Security

@@ -11,7 +11,7 @@ class Settings(BaseSettings):
     Application settings loaded from environment variables
     """
     # API Configuration
-    BASE_PATH: str = ""  # e.g., "/apidays2025/quiz" or empty for root
+    BASE_PATH: str = ""  # e.g., "/event-name/quiz" or empty for root
     
     # Database
     DATABASE_URL: str = "postgresql://quiz_user:quiz_password@db:5432/gravitee_quiz"
