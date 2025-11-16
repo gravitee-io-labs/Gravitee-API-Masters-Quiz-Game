@@ -31,10 +31,7 @@ services:
     dockerContext: .
     envVars:
       - key: API_BASE_URL
-        fromService:
-          type: web
-          name: gravitee-quiz-backend
-          envVarKey: RENDER_EXTERNAL_URL
+        value: https://gravitee-quiz-backend.onrender.com/api
     autoDeploy: true
 
   # Admin Console Frontend
@@ -47,10 +44,7 @@ services:
     dockerContext: .
     envVars:
       - key: API_BASE_URL
-        fromService:
-          type: web
-          name: gravitee-quiz-backend
-          envVarKey: RENDER_EXTERNAL_URL
+        value: https://gravitee-quiz-backend.onrender.com/api
     autoDeploy: true
 
   # Scoreboard Display
@@ -63,10 +57,7 @@ services:
     dockerContext: .
     envVars:
       - key: API_BASE_URL
-        fromService:
-          type: web
-          name: gravitee-quiz-backend
-          envVarKey: RENDER_EXTERNAL_URL
+        value: https://gravitee-quiz-backend.onrender.com/api
     autoDeploy: true
 
 databases:
