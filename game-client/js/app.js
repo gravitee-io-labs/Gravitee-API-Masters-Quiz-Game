@@ -16,6 +16,10 @@ class QuizApp {
         this.answerSubmitted = false; // Flag to prevent multiple submissions
         this.settings = null; // Game settings
         
+        // Buzzer manager
+        this.buzzerManager = null;
+        this.buzzerUI = null;
+        
         // Initialize
         this.init();
     }
@@ -25,7 +29,23 @@ class QuizApp {
         this.setupEventListeners();
         this.setupKeyboardControls();
         await this.loadSettings();
+        this.initializeBuzzers();
         this.showPage('homePage');
+    }
+    
+    /**
+     * Initialize buzzer manager and UI
+     */
+    initializeBuzzers() {
+        if (typeof BuzzerManager !== 'undefined') {
+            this.buzzerManager = new BuzzerManager();
+            if (typeof BuzzerUI !== 'undefined') {
+                this.buzzerUI = new BuzzerUI(this, this.buzzerManager);
+                console.log('Buzzer system initialized');
+            }
+        } else {
+            console.warn('BuzzerManager not available');
+        }
     }
     
     /**
@@ -184,6 +204,26 @@ class QuizApp {
         setTimeout(() => {
             toast.style.display = 'none';
         }, 5000);
+    }
+    
+    /**
+     * Show success toast
+     */
+    showToast(message, type = 'success') {
+        // Reuse error toast for now, could create separate success toast
+        const toast = document.getElementById('errorToast');
+        const messageEl = document.getElementById('errorMessage');
+        
+        if (!toast || !messageEl) return;
+        
+        messageEl.textContent = message;
+        toast.className = `toast ${type}`;
+        toast.style.display = 'block';
+        
+        setTimeout(() => {
+            toast.style.display = 'none';
+            toast.className = 'toast error'; // Reset to default
+        }, 3000);
     }
     
     /**
@@ -435,6 +475,8 @@ class QuizApp {
         
         // Store answer
         const question = this.questions[this.currentQuestionIndex];
+        const isCorrect = answer === question.correct_answer;
+        
         this.answers.push({
             question_id: question.id,
             player_answer: answer,
@@ -444,8 +486,15 @@ class QuizApp {
         console.log('Answer submitted:', {
             question: this.currentQuestionIndex + 1,
             answer,
+            correct: question.correct_answer,
+            isCorrect,
             timeTaken,
         });
+        
+        // Provide LED feedback through buzzers
+        if (this.buzzerUI && answer) {
+            this.buzzerUI.provideFeedback(answer, isCorrect);
+        }
         
         // Move to next question after short delay
         setTimeout(() => {

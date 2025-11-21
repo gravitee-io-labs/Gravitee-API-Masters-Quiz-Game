@@ -62,6 +62,20 @@ const translations = {
         'common.error': 'An error occurred. Please try again.',
         'common.green': 'Green',
         'common.red': 'Red',
+        
+        // Buzzer
+        'buzzer.title': 'Physical Buzzers',
+        'buzzer.description': 'Connect your physical Green and Red buzzers via Bluetooth to play the game with real buttons!',
+        'buzzer.notSupported': 'Web Bluetooth is not supported in this browser. Please use Chrome, Edge, or Opera.',
+        'buzzer.status': 'Connection Status',
+        'buzzer.greenBuzzer': 'Green Buzzer',
+        'buzzer.redBuzzer': 'Red Buzzer',
+        'buzzer.disconnected': 'Disconnected',
+        'buzzer.connected': 'Connected',
+        'buzzer.connect': 'Connect',
+        'buzzer.disconnect': 'Disconnect',
+        'buzzer.test': 'Test Buzzers',
+        'buzzer.disconnectAll': 'Disconnect All',
     },
     fr: {
         // Home page
@@ -121,6 +135,20 @@ const translations = {
         'common.error': 'Une erreur est survenue. Veuillez réessayer.',
         'common.green': 'Vert',
         'common.red': 'Rouge',
+        
+        // Buzzer
+        'buzzer.title': 'Buzzers Physiques',
+        'buzzer.description': 'Connectez vos buzzers physiques Vert et Rouge via Bluetooth pour jouer au jeu avec de vrais boutons !',
+        'buzzer.notSupported': "Le Bluetooth Web n'est pas supporté par ce navigateur. Veuillez utiliser Chrome, Edge ou Opera.",
+        'buzzer.status': 'État de la Connexion',
+        'buzzer.greenBuzzer': 'Buzzer Vert',
+        'buzzer.redBuzzer': 'Buzzer Rouge',
+        'buzzer.disconnected': 'Déconnecté',
+        'buzzer.connected': 'Connecté',
+        'buzzer.connect': 'Connecter',
+        'buzzer.disconnect': 'Déconnecter',
+        'buzzer.test': 'Tester',
+        'buzzer.disconnectAll': 'Tout Déconnecter',
     }
 };
 

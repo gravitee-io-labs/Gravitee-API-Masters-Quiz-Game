@@ -199,10 +199,97 @@
         <span id="errorMessage"></span>
     </div>
 
+    <!-- Buzzer Settings Modal -->
+    <div id="buzzerModal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>
+                    <i class="ph ph-bluetooth"></i>
+                    <span data-i18n="buzzer.title">Physical Buzzers</span>
+                </h2>
+                <button class="modal-close" id="closeBuzzerModal" aria-label="Close">
+                    <i class="ph ph-x"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="buzzer-info">
+                    <p data-i18n="buzzer.description">
+                        Connect your physical Green and Red buzzers via Bluetooth to play the game with real buttons!
+                    </p>
+                    <div class="buzzer-warning" id="bluetoothNotSupported" style="display: none;">
+                        <i class="ph ph-warning"></i>
+                        <span data-i18n="buzzer.notSupported">Web Bluetooth is not supported in this browser. Please use Chrome, Edge, or Opera.</span>
+                    </div>
+                </div>
+                
+                <div class="buzzer-status-section">
+                    <h3 data-i18n="buzzer.status">Connection Status</h3>
+                    
+                    <!-- Green Buzzer -->
+                    <div class="buzzer-device">
+                        <div class="buzzer-device-header">
+                            <div class="buzzer-device-icon green">
+                                <i class="ph ph-circle"></i>
+                            </div>
+                            <div class="buzzer-device-info">
+                                <h4 data-i18n="buzzer.greenBuzzer">Green Buzzer</h4>
+                                <span class="buzzer-status-text" id="greenBuzzerStatus" data-i18n="buzzer.disconnected">Disconnected</span>
+                            </div>
+                        </div>
+                        <div class="buzzer-device-actions">
+                            <span class="buzzer-battery" id="greenBuzzerBattery" style="display: none;">
+                                <i class="ph ph-battery-high"></i>
+                                <span id="greenBuzzerBatteryLevel">--</span>%
+                            </span>
+                            <button class="btn btn-small btn-primary" id="connectGreenBuzzer" data-i18n="buzzer.connect">Connect</button>
+                            <button class="btn btn-small btn-secondary" id="disconnectGreenBuzzer" style="display: none;" data-i18n="buzzer.disconnect">Disconnect</button>
+                        </div>
+                    </div>
+                    
+                    <!-- Red Buzzer -->
+                    <div class="buzzer-device">
+                        <div class="buzzer-device-header">
+                            <div class="buzzer-device-icon red">
+                                <i class="ph ph-circle"></i>
+                            </div>
+                            <div class="buzzer-device-info">
+                                <h4 data-i18n="buzzer.redBuzzer">Red Buzzer</h4>
+                                <span class="buzzer-status-text" id="redBuzzerStatus" data-i18n="buzzer.disconnected">Disconnected</span>
+                            </div>
+                        </div>
+                        <div class="buzzer-device-actions">
+                            <span class="buzzer-battery" id="redBuzzerBattery" style="display: none;">
+                                <i class="ph ph-battery-high"></i>
+                                <span id="redBuzzerBatteryLevel">--</span>%
+                            </span>
+                            <button class="btn btn-small btn-primary" id="connectRedBuzzer" data-i18n="buzzer.connect">Connect</button>
+                            <button class="btn btn-small btn-secondary" id="disconnectRedBuzzer" style="display: none;" data-i18n="buzzer.disconnect">Disconnect</button>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="buzzer-actions">
+                    <button class="btn btn-secondary" id="testBuzzers" disabled data-i18n="buzzer.test">Test Buzzers</button>
+                    <button class="btn btn-secondary" id="disconnectAllBuzzers" disabled data-i18n="buzzer.disconnectAll">Disconnect All</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer with Settings Button -->
+    <footer class="footer">
+        <button id="buzzerSettingsButton" class="btn-icon" aria-label="Buzzer Settings" title="Buzzer Settings">
+            <i class="ph ph-bluetooth" id="buzzerIcon"></i>
+            <span class="buzzer-indicator" id="buzzerIndicator"></span>
+        </button>
+    </footer>
+
     <script src="js/i18n.js"></script>
     <script src="js/theme.js"></script>
     <script src="js/particles.js"></script>
     <script src="js/api.js"></script>
+    <script src="js/buzzer.js"></script>
+    <script src="js/buzzer-ui.js"></script>
     <script src="js/app.js"></script>
 </body>
 </html>
