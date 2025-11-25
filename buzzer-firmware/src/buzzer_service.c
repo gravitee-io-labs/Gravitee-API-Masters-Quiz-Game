@@ -68,9 +68,12 @@ static ssize_t write_led_control(struct bt_conn *conn,
     memcpy(led_rgb, buf, 3);
     
     /* Update LED */
-    led_set_rgb(led_rgb[0], led_rgb[1], led_rgb[2]);
-    
-    printk("LED updated: R=%d G=%d B=%d\n", led_rgb[0], led_rgb[1], led_rgb[2]);
+    if (led_rgb[0] > 128 || led_rgb[1] > 128 || led_rgb[2] > 128) {
+        led_on();
+    } else {
+        led_off();
+    }
+    printk("LED updated: %s\n", (led_rgb[0] > 128 || led_rgb[1] > 128 || led_rgb[2] > 128) ? "ON" : "OFF");
 
     return len;
 }

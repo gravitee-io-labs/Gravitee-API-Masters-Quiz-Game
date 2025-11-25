@@ -16,7 +16,8 @@ static const struct device *gpio_dev = NULL;
 
 /* Auto-off timer for power saving */
 static struct k_timer led_auto_off_timer;
-static bool auto_off_enabled = false;
+/* Commented out unused variable to suppress warning */
+// static bool auto_off_enabled = false;
 
 /* Timer callback to turn off LED */
 static void led_auto_off_handler(struct k_timer *timer)
@@ -37,53 +38,29 @@ int led_init(void)
     }
 
     /* Configure LED pin as output, initially off */
-    ret = gpio_pin_configure(gpio_dev, LED_RED_PIN, GPIO_OUTPUT_INACTIVE);
+    ret = gpio_pin_configure(gpio_dev, BUZZER_LED_PIN, GPIO_OUTPUT_INACTIVE);
     if (ret < 0) {
-        printk("Failed to configure LED pin %d\n", LED_RED_PIN);
+        printk("Failed to configure LED pin %d\n", BUZZER_LED_PIN);
         return ret;
     }
 
     /* Initialize auto-off timer */
     k_timer_init(&led_auto_off_timer, led_auto_off_handler, NULL);
 
-    printk("LED initialized on pin P0.%d\n", LED_RED_PIN);
-    
+    printk("LED initialized on pin P0.%d\n", BUZZER_LED_PIN);
     return 0;
 }
 
-void led_set_rgb(uint8_t r, uint8_t g, uint8_t b)
+void led_on(void)
 {
-    if (!gpio_dev) {
-        return;
-    }
-    
-    /* Simple on/off based on RGB values (any color > 128 = on) */
-    bool led_on = (r > 128) || (g > 128) || (b > 128);
-    
-    gpio_pin_set(gpio_dev, LED_RED_PIN, led_on ? 1 : 0);
-
-    /* Start/restart auto-off timer if LED is on */
-    if (led_on) {
-#ifdef LED_AUTO_OFF_TIMEOUT_MS
-        k_timer_start(&led_auto_off_timer, 
-                     K_MSEC(LED_AUTO_OFF_TIMEOUT_MS), 
-                     K_NO_WAIT);
-        auto_off_enabled = true;
-#endif
-    } else {
-        /* LED is off, stop timer */
-        k_timer_stop(&led_auto_off_timer);
-        auto_off_enabled = false;
+    if (gpio_dev) {
+        gpio_pin_set(gpio_dev, BUZZER_LED_PIN, 1);
     }
 }
 
 void led_off(void)
 {
-    if (!gpio_dev) {
-        return;
+    if (gpio_dev) {
+        gpio_pin_set(gpio_dev, BUZZER_LED_PIN, 0);
     }
-    
-    gpio_pin_set(gpio_dev, LED_RED_PIN, 0);
-    k_timer_stop(&led_auto_off_timer);
-    auto_off_enabled = false;
 }

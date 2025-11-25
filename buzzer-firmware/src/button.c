@@ -37,15 +37,20 @@ static void debounce_timer_handler(struct k_timer *timer)
     
     /* Read actual button state after debounce period */
 #if DT_NODE_EXISTS(BUTTON_NODE)
-    bool current_state = !gpio_pin_get_dt(&button);  // Active low
+    int raw_value = gpio_pin_get_dt(&button);
+    bool current_state = (raw_value == 0);  // Active low: 0 = pressed
+    printk("Button debounce: raw=%d, state=%s\n", raw_value, current_state ? "pressed" : "released");
 #else
     const struct device *gpio_dev = device_get_binding(BUTTON_GPIO_LABEL);
-    bool current_state = !gpio_pin_get(gpio_dev, BUTTON_GPIO_PIN);
+    int raw_value = gpio_pin_get(gpio_dev, BUTTON_GPIO_PIN);
+    bool current_state = (raw_value == 0);
+    printk("Button debounce: raw=%d, state=%s\n", raw_value, current_state ? "pressed" : "released");
 #endif
     
     /* Only trigger callback if state actually changed */
     if (current_state != last_button_state) {
         last_button_state = current_state;
+        printk("Button state changed to: %s\n", current_state ? "PRESSED" : "RELEASED");
         
         if (user_callback) {
             user_callback(current_state);
@@ -62,10 +67,13 @@ static void button_pressed_handler(const struct device *dev,
     ARG_UNUSED(cb);
     ARG_UNUSED(pins);
     
+    printk("Button IRQ triggered! pins=0x%08x\n", pins);
+    
     /* Start debounce timer if not already in progress */
     if (!debounce_in_progress) {
         debounce_in_progress = true;
         k_timer_start(&debounce_timer, K_MSEC(BUTTON_DEBOUNCE_MS), K_NO_WAIT);
+        printk("Debounce timer started\n");
     }
 }
 
@@ -101,10 +109,10 @@ int button_init(button_callback_t callback)
     gpio_init_callback(&button_cb_data, button_pressed_handler, BIT(button.pin));
     gpio_add_callback(button.port, &button_cb_data);
 #else
-    /* Manual GPIO configuration */
-    const struct device *gpio_dev = device_get_binding(BUTTON_GPIO_LABEL);
-    if (!gpio_dev) {
-        printk("GPIO device not found\n");
+    /* Manual GPIO configuration - use modern API */
+    const struct device *gpio_dev = DEVICE_DT_GET(DT_NODELABEL(gpio0));
+    if (!device_is_ready(gpio_dev)) {
+        printk("GPIO device not ready\n");
         return -ENODEV;
     }
 
@@ -128,9 +136,12 @@ int button_init(button_callback_t callback)
     k_timer_init(&debounce_timer, debounce_timer_handler, NULL);
 
 #if DT_NODE_EXISTS(BUTTON_NODE)
-    printk("Button initialized on pin %d\n", button.pin);
+    /* Read initial button state */
+    int initial_state = gpio_pin_get_dt(&button);
+    printk("Button initialized on P0.%d (pin=%d, initial_state=%d)\n", 
+           button.pin, button.pin, initial_state);
 #else
-    printk("Button initialized on pin %d\n", BUTTON_GPIO_PIN);
+    printk("Button initialized on pin %d (manual config)\n", BUTTON_GPIO_PIN);
 #endif
     
     return 0;

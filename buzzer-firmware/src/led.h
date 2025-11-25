@@ -15,13 +15,9 @@
 int led_init(void);
 
 /**
- * Set LED color using RGB values
- * 
- * @param red Red component (0-255)
- * @param green Green component (0-255)
- * @param blue Blue component (0-255)
+ * Turn on LED
  */
-void led_set_rgb(uint8_t red, uint8_t green, uint8_t blue);
+void led_on(void);
 
 /**
  * Turn off LED

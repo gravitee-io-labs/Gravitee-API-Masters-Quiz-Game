@@ -15,8 +15,17 @@
 #define BUZZER_ID 1  // Change to 2 for Red buzzer
 
 /* Device name will be "Gravitee-Buzzer-Green" or "Gravitee-Buzzer-Red" */
-#define DEVICE_NAME_GREEN "Gravitee-Buzzer-Green"
-#define DEVICE_NAME_RED   "Gravitee-Buzzer-Red"
+#define DEVICE_NAME_GREEN "Gravitee Quiz Buzzer - Green"
+#define DEVICE_NAME_RED   "Gravitee Quiz Buzzer - Red"
+
+// Ensure the device name matches the buzzer ID
+#if BUZZER_ID == 1
+#define DEVICE_NAME DEVICE_NAME_GREEN
+#elif BUZZER_ID == 2
+#define DEVICE_NAME DEVICE_NAME_RED
+#else
+#error "Invalid BUZZER_ID. Must be 1 (Green) or 2 (Red)."
+#endif
 
 /* ==================== GPIO PIN CONFIGURATION ==================== */
 /* Adjust these based on your actual hardware connections */
@@ -24,9 +33,12 @@
 #define BUTTON_PIN          11  // P0.11 - Button input (active low)
 #define BUTTON_DEBOUNCE_MS  50  // Debounce time in milliseconds
 
-#define LED_RED_PIN         13  // P0.13 - Red LED
-#define LED_GREEN_PIN       14  // P0.14 - Green LED
-#define LED_BLUE_PIN        15  // P0.15 - Blue LED
+/* Status LED: Onboard blue LED on P0.15 (active low on Nice!Nano/promicro) */
+#define STATUS_LED_PIN      15  // P0.15 - Onboard blue LED for connection status
+
+/* Buzzer LED: External white LED for illuminating the buzzer button */
+/* Connect: P0.06 (pin 1) -> 220 ohm resistor -> LED anode, LED cathode -> GND */
+#define BUZZER_LED_PIN      6   // P0.06 - External white LED
 
 /* ==================== BLE CONFIGURATION ==================== */
 

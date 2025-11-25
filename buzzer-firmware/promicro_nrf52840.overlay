@@ -1,0 +1,33 @@
+/*
+ * Device tree overlay for Quiz Buzzer on Nice!Nano / Pro Micro nRF52840
+ */
+
+/ {
+	aliases {
+		sw0 = &button0;
+		led0 = &status_led;   /* Onboard blue LED (P0.15) for status indication */
+		led1 = &buzzer_led;   /* External white LED (P0.06) for buzzer illumination */
+	};
+
+	buttons {
+		compatible = "gpio-keys";
+		button0: button_0 {
+			gpios = <&gpio0 11 (GPIO_PULL_UP | GPIO_ACTIVE_LOW)>;
+			label = "Buzzer button";
+		};
+	};
+
+	leds {
+		compatible = "gpio-leds";
+		/* Onboard blue LED on P0.15 for connection status */
+		status_led: led_0 {
+			gpios = <&gpio0 15 GPIO_ACTIVE_LOW>;
+			label = "Status LED";
+		};
+		/* External white LED on P0.06 (pin 1) for buzzer illumination */
+		buzzer_led: led_1 {
+			gpios = <&gpio0 6 GPIO_ACTIVE_HIGH>;
+			label = "Buzzer LED";
+		};
+	};
+};
