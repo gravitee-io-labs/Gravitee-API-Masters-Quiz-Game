@@ -2,6 +2,11 @@
  * Device tree overlay for Quiz Buzzer on Nice!Nano / Pro Micro nRF52840
  */
 
+/* Enable DC/DC regulator for power efficiency */
+&reg1 {
+	regulator-initial-mode = <NRF5X_REG_MODE_DCDC>;
+};
+
 / {
 	aliases {
 		sw0 = &button0;
@@ -19,7 +24,7 @@
 
 	leds {
 		compatible = "gpio-leds";
-		/* Onboard blue LED on P0.15 for connection status */
+		/* Onboard red LED on P0.15 for connection status */
 		status_led: led_0 {
 			gpios = <&gpio0 15 GPIO_ACTIVE_LOW>;
 			label = "Status LED";
@@ -29,5 +34,34 @@
 			gpios = <&gpio0 6 GPIO_ACTIVE_HIGH>;
 			label = "Buzzer LED";
 		};
+	};
+
+	/* Battery voltage divider for 18650 Li-ion (4.2V max)
+	 * Use voltage divider: VBAT -> 1M -> ADC_IN -> 1M -> GND
+	 * This gives VBAT/2 to the ADC input (max ~2.1V which is safe for nRF52840)
+	 * Connect voltage divider output to P0.31 (AIN7)
+	 */
+	vbatt {
+		compatible = "voltage-divider";
+		io-channels = <&adc 7>;  /* AIN7 = P0.31 */
+		output-ohms = <1000000>; /* 1M bottom resistor */
+		full-ohms = <2000000>;   /* 1M + 1M = 2M total */
+	};
+};
+
+/* Enable ADC for battery measurement */
+&adc {
+	status = "okay";
+	#address-cells = <1>;
+	#size-cells = <0>;
+
+	/* Channel for battery voltage measurement on AIN7 (P0.31) */
+	channel@7 {
+		reg = <7>;
+		zephyr,gain = "ADC_GAIN_1_6";
+		zephyr,reference = "ADC_REF_INTERNAL";
+		zephyr,acquisition-time = <ADC_ACQ_TIME_DEFAULT>;
+		zephyr,input-positive = <NRF_SAADC_AIN7>;
+		zephyr,resolution = <12>;
 	};
 };

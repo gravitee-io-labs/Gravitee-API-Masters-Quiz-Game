@@ -1,6 +1,8 @@
 /**
  * Main firmware file for Quiz Buzzer
  * NRF52840 BLE Controller
+ * 
+ * Optimized for low power with 18650 Li-ion battery
  */
 
 #include <zephyr/kernel.h>
@@ -10,6 +12,8 @@
 #include <zephyr/bluetooth/uuid.h>
 #include <zephyr/device.h>
 #include <zephyr/drivers/gpio.h>
+#include <zephyr/pm/pm.h>
+#include <zephyr/pm/device.h>
 
 #include "config.h"
 #include "buzzer_service.h"
@@ -18,8 +22,8 @@
 #include "battery.h"
 
 #define LED_FLASH_DURATION_MS    50   /* Short flash duration */
-#define LED_BLINK_DISCONNECTED_MS 1000  /* 1 second when disconnected */
-#define LED_BLINK_CONNECTED_MS   3000  /* 3 seconds when connected */
+#define LED_BLINK_DISCONNECTED_MS 2000  /* 2 seconds when disconnected (slower = less power) */
+#define LED_BLINK_CONNECTED_MS   5000  /* 5 seconds when connected (very slow) */
 
 /* Connection handle */
 static struct bt_conn *current_conn = NULL;
@@ -62,10 +66,13 @@ static void connected(struct bt_conn *conn, uint8_t err)
     current_conn = bt_conn_ref(conn);
     update_connection_status(true);
     
-    /* Flash buzzer LED to indicate connection */
-    gpio_pin_set_dt(&buzzer_led, 1);
-    k_sleep(K_MSEC(200));
-    gpio_pin_set_dt(&buzzer_led, 0);
+    /* Blink buzzer LED 5 times quickly to indicate successful connection */
+    for (int i = 0; i < 5; i++) {
+        gpio_pin_set_dt(&buzzer_led, 1);
+        k_sleep(K_MSEC(100));
+        gpio_pin_set_dt(&buzzer_led, 0);
+        k_sleep(K_MSEC(100));
+    }
 }
 
 static void disconnected(struct bt_conn *conn, uint8_t reason)
@@ -95,11 +102,6 @@ static void adv_restart_work_handler(struct k_work *work)
     int err;
 
     printk("Restarting advertising from work queue...\n");
-    
-    /* Flash buzzer LED to indicate disconnection */
-    gpio_pin_set_dt(&buzzer_led, 1);
-    k_sleep(K_MSEC(200));
-    gpio_pin_set_dt(&buzzer_led, 0);
 
     /* Small delay to let BT stack settle */
     k_sleep(K_MSEC(100));
@@ -163,10 +165,24 @@ static void led_flash_work_handler(struct k_work *work)
 {
     ARG_UNUSED(work);
     
-    /* Short flash */
-    gpio_pin_set_dt(&status_led, 1);
+    /* Short flash ON for status LED
+     * Status LED is active-low hardware:
+     * gpio_pin_set(port, pin, 0) = pin LOW = LED ON
+     * gpio_pin_set(port, pin, 1) = pin HIGH = LED OFF
+     */
+    gpio_pin_set(status_led.port, status_led.pin, 0);  /* ON (low) */
+    
+    /* Also flash buzzer LED when disconnected (active-high, so 1=ON) */
+    if (!connection_status) {
+        gpio_pin_set_dt(&buzzer_led, 1);  /* ON */
+    }
+    
     k_sleep(K_MSEC(LED_FLASH_DURATION_MS));
-    gpio_pin_set_dt(&status_led, 0);
+    
+    gpio_pin_set(status_led.port, status_led.pin, 1);  /* OFF (high) */
+    if (!connection_status) {
+        gpio_pin_set_dt(&buzzer_led, 0);  /* OFF */
+    }
 }
 
 /* LED timer handler - just schedules work, can't sleep in timer context */
@@ -216,13 +232,14 @@ int main(void)
 
     printk("Starting Quiz Buzzer Firmware (Buzzer ID: %d)\n", BUZZER_ID);
 
-    /* Initialize status LED first (onboard blue LED) */
+    /* Initialize status LED first (onboard blue LED) - start OFF */
     if (!device_is_ready(status_led.port)) {
         printk("Status LED device not ready\n");
         return -1;
     }
-    gpio_pin_configure_dt(&status_led, GPIO_OUTPUT_ACTIVE);
-    printk("Status LED initialized on P0.15\n");
+    gpio_pin_configure_dt(&status_led, GPIO_OUTPUT);  /* Configure as output */
+    gpio_pin_set(status_led.port, status_led.pin, 1);  /* Start OFF (high = LED off for active-low) */
+    printk("Status LED initialized on P0.15 (OFF)\n");
 
     /* Initialize buzzer LED (external white LED) */
     if (!device_is_ready(buzzer_led.port)) {
@@ -249,9 +266,9 @@ int main(void)
     /* Startup LED sequence - blink status LED 5 times to confirm flash worked */
     printk("Startup LED sequence...\n");
     for (int i = 0; i < 5; i++) {
-        gpio_pin_set_dt(&status_led, 1);
+        gpio_pin_set(status_led.port, status_led.pin, 0);  /* ON (low) */
         k_sleep(K_MSEC(100));
-        gpio_pin_set_dt(&status_led, 0);
+        gpio_pin_set(status_led.port, status_led.pin, 1);  /* OFF (high) */
         k_sleep(K_MSEC(100));
     }
     printk("Startup LED sequence complete\n");
@@ -301,14 +318,20 @@ int main(void)
 
     printk("Quiz Buzzer ready - advertising as: %s\n", bt_get_name());
 
-    /* Main loop */
+    /* Main loop - use longer sleep for power efficiency
+     * The system will wake on:
+     * - BLE events (connection, disconnection)
+     * - Button press interrupts
+     * - Timer expiry (LED blink)
+     */
     while (1) {
-        k_sleep(K_SECONDS(1));
+        /* Sleep for 10 seconds - Zephyr will enter low power mode
+         * Events (BLE, GPIO interrupts, timers) will wake the CPU
+         */
+        k_sleep(K_SECONDS(10));
         
-        /* Update battery level periodically */
-        if (current_conn) {
-            battery_update();
-        }
+        /* Update battery level periodically (rate-limited in battery_update) */
+        battery_update();
     }
 
     return 0;

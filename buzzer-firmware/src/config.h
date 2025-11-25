@@ -58,9 +58,14 @@
 #define BT_UUID_BUZZER_ID_VAL \
     BT_UUID_128_ENCODE(0x6e400004, 0xb5a3, 0xf393, 0xe0a9, 0xe50e24dcca9e)
 
-/* BLE advertising interval (in 0.625ms units) */
-#define ADV_INTERVAL_MIN    0x0020  // 20ms
-#define ADV_INTERVAL_MAX    0x0040  // 40ms
+/* BLE advertising interval (in 0.625ms units)
+ * Slower advertising = lower power consumption
+ * Fast advertising (20-40ms): ~1-2mA, good for quick discovery
+ * Slow advertising (100-200ms): ~0.3-0.5mA, better for battery life
+ * We use moderate interval for reasonable discovery time
+ */
+#define ADV_INTERVAL_MIN    0x0050  /* 50ms (80 * 0.625ms) */
+#define ADV_INTERVAL_MAX    0x00A0  /* 100ms (160 * 0.625ms) */
 
 /* Connection interval for low latency (in 1.25ms units) */
 #define CONN_INTERVAL_MIN   8   // 10ms
@@ -71,19 +76,27 @@
 /* LED timeout - automatically turn off LED after this time (ms) */
 #define LED_AUTO_OFF_TIMEOUT_MS  5000  // 5 seconds
 
-/* Battery level update interval (ms) */
-#define BATTERY_UPDATE_INTERVAL_MS  60000  // 1 minute
-
 /* Button press notification timeout (ms) */
 #define BUTTON_NOTIFICATION_TIMEOUT_MS  100  // 100ms
 
 /* ==================== BATTERY MONITORING ==================== */
+/* 18650 Li-ion battery with voltage divider (1M + 1M)
+ * Battery voltage range: 3.0V (empty) to 4.2V (full)
+ * After voltage divider: 1.5V to 2.1V at ADC input
+ * ADC channel: AIN7 (P0.31)
+ * 
+ * Wiring: VBAT+ -> 1M resistor -> P0.31 -> 1M resistor -> GND
+ */
+#define BATTERY_ADC_CHANNEL     7       /* AIN7 = P0.31 */
+#define BATTERY_DIVIDER_RATIO   2       /* Voltage divider 1:1 = ratio of 2 */
 
-/* ADC channel for battery voltage measurement */
-#define BATTERY_ADC_CHANNEL  0
+/* 18650 Li-ion voltage thresholds (in millivolts at battery) */
+#define BATTERY_FULL_MV         4200    /* 4.2V = 100% (fully charged) */
+#define BATTERY_NOMINAL_MV      3700    /* 3.7V = ~50% (nominal voltage) */
+#define BATTERY_LOW_MV          3400    /* 3.4V = ~20% (low battery warning) */
+#define BATTERY_EMPTY_MV        3000    /* 3.0V = 0% (cutoff to protect battery) */
 
-/* Battery voltage thresholds (in millivolts) */
-#define BATTERY_FULL_MV     3000  // 3.0V (CR2032)
-#define BATTERY_EMPTY_MV    2000  // 2.0V (cutoff)
+/* Battery update interval - less frequent saves power */
+#define BATTERY_UPDATE_INTERVAL_MS  300000  /* 5 minutes (was 1 minute) */
 
 #endif /* CONFIG_H */

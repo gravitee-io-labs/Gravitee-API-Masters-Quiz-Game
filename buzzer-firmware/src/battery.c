@@ -1,130 +1,168 @@
 /**
- * Battery monitoring implementation
+ * Battery monitoring implementation for 18650 Li-ion battery
+ * 
+ * Uses nRF52840 SAADC to measure battery voltage through a voltage divider.
+ * Wiring: VBAT+ -> 1M resistor -> P0.31 (AIN7) -> 1M resistor -> GND
+ * 
+ * This gives VBAT/2 at the ADC input, keeping it within safe range.
  */
 
 #include <zephyr/kernel.h>
 #include <zephyr/device.h>
+#include <zephyr/devicetree.h>
 #include <zephyr/drivers/adc.h>
 #include <zephyr/bluetooth/services/bas.h>
 
 #include "config.h"
 #include "battery.h"
 
-/* ADC configuration */
+/* ADC configuration from device tree */
 #define ADC_NODE DT_NODELABEL(adc)
-#define ADC_RESOLUTION 12
-#define ADC_GAIN ADC_GAIN_1_6
-#define ADC_REFERENCE ADC_REF_INTERNAL
-#define ADC_ACQUISITION_TIME ADC_ACQ_TIME_DEFAULT
 
-static uint8_t battery_level = 100;
-static int64_t last_update_time = 0;
+#if DT_NODE_EXISTS(ADC_NODE)
+static const struct device *adc_dev = DEVICE_DT_GET(ADC_NODE);
+#else
 static const struct device *adc_dev = NULL;
+#endif
 
-#if DT_NODE_EXISTS(ADC_NODE) && 0  /* Disabled - ADC code for future use */
-
+/* ADC channel configuration */
 static const struct adc_channel_cfg channel_cfg = {
-    .gain = ADC_GAIN,
-    .reference = ADC_REFERENCE,
-    .acquisition_time = ADC_ACQUISITION_TIME,
+    .gain = ADC_GAIN_1_6,
+    .reference = ADC_REF_INTERNAL,  /* 0.6V internal reference */
+    .acquisition_time = ADC_ACQ_TIME(ADC_ACQ_TIME_MICROSECONDS, 40),
     .channel_id = BATTERY_ADC_CHANNEL,
-#ifdef CONFIG_ADC_NRFX_SAADC
-    .input_positive = SAADC_CH_PSELP_PSELP_VDD,
+#if defined(CONFIG_ADC_NRFX_SAADC)
+    .input_positive = SAADC_CH_PSELP_PSELP_AnalogInput7,  /* AIN7 = P0.31 */
 #endif
 };
 
+/* ADC sample buffer and sequence */
 static int16_t adc_sample_buffer[1];
 static struct adc_sequence sequence = {
     .buffer = adc_sample_buffer,
     .buffer_size = sizeof(adc_sample_buffer),
-    .resolution = ADC_RESOLUTION,
+    .resolution = 12,
+    .channels = BIT(BATTERY_ADC_CHANNEL),
 };
 
-static uint8_t calculate_battery_percentage(int16_t adc_value)
+/* State */
+static uint8_t battery_level = 100;
+static int64_t last_update_time = 0;
+static bool adc_initialized = false;
+
+/**
+ * Convert ADC reading to battery millivolts
+ * 
+ * ADC config: 12-bit, 1/6 gain, 0.6V reference
+ * Max measurable voltage at ADC pin: 0.6V * 6 = 3.6V
+ * ADC value range: 0-4095 (12-bit)
+ * 
+ * Formula: V_adc = (adc_value / 4096) * 3.6V
+ * V_batt = V_adc * BATTERY_DIVIDER_RATIO
+ */
+static int32_t adc_to_millivolts(int16_t adc_value)
 {
-    /* Convert ADC value to millivolts */
-    int32_t mv = adc_value;
+    /* Handle negative values (noise) */
+    if (adc_value < 0) {
+        adc_value = 0;
+    }
     
-    /* Scale based on ADC reference and gain */
-    /* For nRF52840 with internal reference (0.6V) and gain 1/6 */
-    /* VDD is measured, range is typically 1.7V - 3.6V */
-    mv = (mv * 3600) / 4096;  // Simplified conversion
+    /* Convert to millivolts at ADC input
+     * With 1/6 gain and 0.6V reference, full scale = 3.6V
+     * mv = (adc_value * 3600) / 4096
+     */
+    int32_t mv_at_adc = (adc_value * 3600) / 4096;
     
-    /* Calculate percentage based on thresholds */
+    /* Scale up by voltage divider ratio to get actual battery voltage */
+    int32_t mv_battery = mv_at_adc * BATTERY_DIVIDER_RATIO;
+    
+    return mv_battery;
+}
+
+/**
+ * Convert battery millivolts to percentage (0-100%)
+ * Uses Li-ion discharge curve approximation
+ */
+static uint8_t millivolts_to_percent(int32_t mv)
+{
     if (mv >= BATTERY_FULL_MV) {
         return 100;
-    } else if (mv <= BATTERY_EMPTY_MV) {
+    }
+    if (mv <= BATTERY_EMPTY_MV) {
         return 0;
+    }
+    
+    /* Li-ion discharge curve is not linear, but we use piecewise linear approximation:
+     * 4.2V - 4.0V: 100% - 80% (rapid initial drop)
+     * 4.0V - 3.7V: 80% - 50%  (gradual decline)
+     * 3.7V - 3.4V: 50% - 20%  (plateau region)
+     * 3.4V - 3.0V: 20% - 0%   (rapid end drop)
+     */
+    
+    if (mv >= 4000) {
+        /* 4.0V - 4.2V: 80% - 100% */
+        return 80 + ((mv - 4000) * 20) / (BATTERY_FULL_MV - 4000);
+    } else if (mv >= 3700) {
+        /* 3.7V - 4.0V: 50% - 80% */
+        return 50 + ((mv - 3700) * 30) / 300;
+    } else if (mv >= 3400) {
+        /* 3.4V - 3.7V: 20% - 50% */
+        return 20 + ((mv - 3400) * 30) / 300;
     } else {
-        return (uint8_t)(((mv - BATTERY_EMPTY_MV) * 100) / 
-                        (BATTERY_FULL_MV - BATTERY_EMPTY_MV));
+        /* 3.0V - 3.4V: 0% - 20% */
+        return ((mv - BATTERY_EMPTY_MV) * 20) / (3400 - BATTERY_EMPTY_MV);
     }
 }
 
-#endif  /* Disabled ADC code */
-
 int battery_init(void)
 {
-    /* Temporarily disable ADC due to device tree issues in SDK v3.1.1 */
-    /* TODO: Re-enable when ADC device tree is properly configured */
-    printk("Battery monitoring disabled (using stub mode)\n");
-    battery_level = 100;  // Assume full battery
-    adc_dev = NULL;
-    return 0;
-
-#if 0  // Disabled ADC code
 #if DT_NODE_EXISTS(ADC_NODE)
-    adc_dev = DEVICE_DT_GET(ADC_NODE);
     if (!device_is_ready(adc_dev)) {
-        printk("ADC device not ready, using stub mode\n");
+        printk("ADC device not ready, battery monitoring disabled\n");
         adc_dev = NULL;
         battery_level = 100;
-        return 0;  // Non-critical, continue without ADC
+        return 0;  /* Non-critical, continue without ADC */
     }
 
     int err = adc_channel_setup(adc_dev, &channel_cfg);
     if (err) {
         printk("ADC channel setup failed (err %d)\n", err);
-        return err;
+        adc_dev = NULL;
+        battery_level = 100;
+        return 0;  /* Non-critical */
     }
 
-    sequence.channels = BIT(BATTERY_ADC_CHANNEL);
-
-    printk("Battery monitoring initialized\n");
+    adc_initialized = true;
+    printk("Battery monitoring initialized (18650 Li-ion, AIN7/P0.31)\n");
     
-    /* Initial battery reading */
+    /* Force initial battery reading */
+    last_update_time = 0;
     battery_update();
     
     return 0;
 #else
-    printk("ADC not available, battery monitoring disabled\n");
-    /* Not a critical error, system can continue without battery monitoring */
-    battery_level = 100;  // Assume full battery
+    printk("ADC not available in device tree, battery monitoring disabled\n");
+    battery_level = 100;
     return 0;
 #endif
-#endif  // Disabled ADC code
 }
 
 void battery_update(void)
 {
-    /* Rate limit updates */
+    /* Rate limit updates to save power */
     int64_t now = k_uptime_get();
-    if ((now - last_update_time) < BATTERY_UPDATE_INTERVAL_MS) {
+    if ((now - last_update_time) < BATTERY_UPDATE_INTERVAL_MS && last_update_time != 0) {
         return;
     }
     last_update_time = now;
 
-    /* ADC disabled - use stub mode */
-    bt_bas_set_battery_level(battery_level);
-
-#if 0  // Disabled ADC code
-#if DT_NODE_EXISTS(ADC_NODE)
-    if (!adc_dev) {
-        /* ADC not available, simulate stable battery */
+    if (!adc_initialized || adc_dev == NULL) {
+        /* ADC not available, just update BLE with current level */
         bt_bas_set_battery_level(battery_level);
         return;
     }
-    
+
+    /* Perform ADC read */
     int err = adc_read(adc_dev, &sequence);
     if (err) {
         printk("ADC read failed (err %d)\n", err);
@@ -132,7 +170,8 @@ void battery_update(void)
     }
 
     int16_t adc_value = adc_sample_buffer[0];
-    uint8_t new_level = calculate_battery_percentage(adc_value);
+    int32_t battery_mv = adc_to_millivolts(adc_value);
+    uint8_t new_level = millivolts_to_percent(battery_mv);
     
     /* Only update if changed by at least 1% to reduce BLE notifications */
     if (new_level != battery_level) {
@@ -141,21 +180,35 @@ void battery_update(void)
         /* Update BLE Battery Service */
         bt_bas_set_battery_level(battery_level);
         
-        printk("Battery level: %d%% (ADC: %d)\n", battery_level, adc_value);
+        printk("Battery: %d%% (%dmV, ADC=%d)\n", battery_level, (int)battery_mv, adc_value);
         
-        /* Optional: Low battery warning */
-        if (battery_level <= 10) {
-            printk("WARNING: Low battery!\n");
+        /* Low battery warning */
+        if (battery_mv <= BATTERY_LOW_MV && battery_mv > BATTERY_EMPTY_MV) {
+            printk("WARNING: Low battery! Consider charging.\n");
+        } else if (battery_mv <= BATTERY_EMPTY_MV) {
+            printk("CRITICAL: Battery empty! Please charge immediately.\n");
         }
     }
-#else
-    /* Without ADC, simulate stable battery */
-    bt_bas_set_battery_level(battery_level);
-#endif
-#endif  // Disabled ADC code
 }
 
 uint8_t battery_get_level(void)
 {
     return battery_level;
+}
+
+/**
+ * Get raw battery voltage in millivolts (for debugging)
+ */
+int32_t battery_get_voltage_mv(void)
+{
+    if (!adc_initialized || adc_dev == NULL) {
+        return -1;
+    }
+    
+    int err = adc_read(adc_dev, &sequence);
+    if (err) {
+        return -1;
+    }
+    
+    return adc_to_millivolts(adc_sample_buffer[0]);
 }
