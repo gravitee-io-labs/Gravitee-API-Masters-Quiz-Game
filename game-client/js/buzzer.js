@@ -72,7 +72,7 @@ class BuzzerManager {
             const device = await navigator.bluetooth.requestDevice({
                 filters: [
                     { 
-                        namePrefix: 'Gravitee-Buzzer',
+                        namePrefix: 'Gravitee Quiz Buzzer',
                         services: [this.BUZZER_SERVICE_UUID]
                     }
                 ],
