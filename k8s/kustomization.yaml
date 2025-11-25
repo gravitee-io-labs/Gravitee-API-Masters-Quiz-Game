@@ -1,0 +1,33 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: quiz-game
+
+resources:
+  - namespace.yaml
+  - secrets.yaml
+  - configmaps.yaml
+  - database.yaml
+  - backend.yaml
+  - game-client.yaml
+  - admin-console.yaml
+  - scoreboard.yaml
+  - ingress.yaml
+
+commonLabels:
+  app.kubernetes.io/managed-by: kustomize
+  app.kubernetes.io/part-of: gravitee-quiz
+
+images:
+  - name: gravitee/quiz-backend
+    newName: dobl1/quiz-backend
+    newTag: "1.0"
+  - name: gravitee/quiz-game-client
+    newName: dobl1/quiz-game-client
+    newTag: "1.0"
+  - name: gravitee/quiz-admin-console
+    newName: dobl1/quiz-admin-console
+    newTag: "1.0"
+  - name: gravitee/quiz-scoreboard
+    newName: dobl1/quiz-scoreboard
+    newTag: "1.0"

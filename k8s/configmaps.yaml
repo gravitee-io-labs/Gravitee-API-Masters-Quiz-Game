@@ -1,0 +1,22 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: quiz-backend-config
+  namespace: quiz-game
+  labels:
+    app.kubernetes.io/name: quiz-backend
+    app.kubernetes.io/part-of: gravitee-quiz
+data:
+  BASE_PATH: ""
+  CORS_ORIGINS: "https://apidays-2025-quiz.events.gravitee.io"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: quiz-frontend-config
+  namespace: quiz-game
+  labels:
+    app.kubernetes.io/name: quiz-frontend
+    app.kubernetes.io/part-of: gravitee-quiz
+data:
+  API_BASE_URL: "https://apidays-2025-quiz.events.gravitee.io/api"
