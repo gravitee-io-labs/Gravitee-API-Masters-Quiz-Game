@@ -204,6 +204,11 @@ class I18n {
                     // Avoid updating inputs, selects, etc.
                     if (!['INPUT', 'SELECT', 'TEXTAREA'].includes(element.tagName)) {
                         element.textContent = translation;
+                        
+                        // Also update data-text attribute for holographic effect (pseudo-elements)
+                        if (element.hasAttribute('data-text')) {
+                            element.setAttribute('data-text', translation);
+                        }
                     }
                 }
             }

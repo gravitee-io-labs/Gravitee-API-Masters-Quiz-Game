@@ -184,6 +184,182 @@ body {
     text-shadow: 0 2px 20px rgba(252, 86, 7, 0.3);
 }
 
+/* Holographic Neon Title Animation */
+.hero-title.holographic {
+    position: relative;
+    background: linear-gradient(
+        90deg,
+        #ff6b1f 0%,
+        #ff9a5c 15%,
+        #fff 25%,
+        #ff6b1f 35%,
+        #fc5607 50%,
+        #ff6b1f 65%,
+        #fff 75%,
+        #ff9a5c 85%,
+        #ff6b1f 100%
+    );
+    background-size: 200% 100%;
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    animation: holographicShift 8s ease-in-out infinite;
+    text-shadow: none;
+    filter: drop-shadow(0 0 8px rgba(252, 86, 7, 0.4))
+            drop-shadow(0 0 20px rgba(252, 86, 7, 0.2));
+    transform-style: preserve-3d;
+    perspective: 1000px;
+}
+
+.hero-title.holographic::before {
+    content: attr(data-text);
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(
+        120deg,
+        transparent 0%,
+        rgba(255, 255, 255, 0.4) 45%,
+        rgba(255, 255, 255, 0.6) 50%,
+        rgba(255, 255, 255, 0.4) 55%,
+        transparent 100%
+    );
+    background-size: 300% 100%;
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    animation: holographicShine 8s ease-in-out infinite;
+    pointer-events: none;
+}
+
+.hero-title.holographic::after {
+    content: attr(data-text);
+    position: absolute;
+    left: 2px;
+    top: 2px;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(
+        90deg,
+        rgba(255, 107, 31, 0.3) 0%,
+        rgba(252, 86, 7, 0.5) 50%,
+        rgba(255, 107, 31, 0.3) 100%
+    );
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    filter: blur(8px);
+    z-index: -1;
+    animation: holographic3D 12s ease-in-out infinite;
+    pointer-events: none;
+}
+
+@keyframes holographicShift {
+    0%, 100% {
+        background-position: 0% 50%;
+        transform: rotateX(0deg) rotateY(0deg);
+    }
+    25% {
+        background-position: 50% 50%;
+        transform: rotateX(1deg) rotateY(-0.5deg);
+    }
+    50% {
+        background-position: 100% 50%;
+        transform: rotateX(0deg) rotateY(1deg);
+    }
+    75% {
+        background-position: 50% 50%;
+        transform: rotateX(-1deg) rotateY(-0.5deg);
+    }
+}
+
+@keyframes holographicShine {
+    0%, 100% {
+        background-position: -100% 0%;
+        opacity: 0.5;
+    }
+    50% {
+        background-position: 200% 0%;
+        opacity: 1;
+    }
+}
+
+@keyframes holographic3D {
+    0%, 100% {
+        transform: translateX(2px) translateY(2px);
+        opacity: 0.4;
+    }
+    25% {
+        transform: translateX(3px) translateY(2px);
+        opacity: 0.5;
+    }
+    50% {
+        transform: translateX(2px) translateY(3px);
+        opacity: 0.45;
+    }
+    75% {
+        transform: translateX(2px) translateY(2px);
+        opacity: 0.5;
+    }
+}
+
+/* Neon glow pulse animation for additional effect */
+.hero-title.holographic {
+    animation: 
+        holographicShift 16s ease-in-out infinite,
+        neonPulse 6s ease-in-out infinite;
+}
+
+@keyframes neonPulse {
+    0%, 100% {
+        filter: drop-shadow(0 0 8px rgba(252, 86, 7, 0.4))
+                drop-shadow(0 0 20px rgba(252, 86, 7, 0.2))
+                drop-shadow(0 0 40px rgba(252, 86, 7, 0.1));
+    }
+    50% {
+        filter: drop-shadow(0 0 10px rgba(252, 86, 7, 0.5))
+                drop-shadow(0 0 25px rgba(252, 86, 7, 0.3))
+                drop-shadow(0 0 50px rgba(252, 86, 7, 0.15));
+    }
+}
+
+/* Dark theme enhanced holographic effect */
+[data-theme="dark"] .hero-title.holographic {
+    background: linear-gradient(
+        90deg,
+        #ff6b1f 0%,
+        #ffb347 15%,
+        #fff 25%,
+        #ff6b1f 35%,
+        #fc5607 50%,
+        #ff6b1f 65%,
+        #fff 75%,
+        #ffb347 85%,
+        #ff6b1f 100%
+    );
+    background-size: 200% 100%;
+    -webkit-background-clip: text;
+    background-clip: text;
+    animation: 
+        holographicShift 16s ease-in-out infinite,
+        neonPulseDark 6s ease-in-out infinite;
+}
+
+@keyframes neonPulseDark {
+    0%, 100% {
+        filter: drop-shadow(0 0 10px rgba(252, 86, 7, 0.5))
+                drop-shadow(0 0 25px rgba(252, 86, 7, 0.3))
+                drop-shadow(0 0 50px rgba(252, 86, 7, 0.15));
+    }
+    50% {
+        filter: drop-shadow(0 0 12px rgba(252, 86, 7, 0.6))
+                drop-shadow(0 0 30px rgba(252, 86, 7, 0.4))
+                drop-shadow(0 0 60px rgba(252, 86, 7, 0.2));
+    }
+}
+
 .hero-subtitle {
     font-size: 1.5rem;
     color: var(--text-secondary);
