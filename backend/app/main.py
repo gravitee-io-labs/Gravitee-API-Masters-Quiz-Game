@@ -8,7 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.database import engine, init_db
-from app.routers import questions, games, results, settings, auth, scoreboard
+from app.routers import questions, games, results, settings, auth, scoreboard, categories
 from app.config import settings as app_settings
 
 # Configure logging
@@ -53,6 +53,7 @@ app.add_middleware(
 
 # Include routers
 app.include_router(auth.router, prefix="/api/auth", tags=["Authentication"])
+app.include_router(categories.router, prefix="/api/categories", tags=["Categories"])
 app.include_router(questions.router, prefix="/api/questions", tags=["Questions"])
 app.include_router(games.router, prefix="/api/games", tags=["Games"])
 app.include_router(results.router, prefix="/api/results", tags=["Results"])

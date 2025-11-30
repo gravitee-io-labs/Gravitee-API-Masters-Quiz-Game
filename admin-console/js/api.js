@@ -149,4 +149,38 @@ const api = {
             body: JSON.stringify(data),
         });
     },
+    
+    // Categories
+    async getCategories(includeInactive = true) {
+        console.log('API: Get categories');
+        return await fetchWithRetry(`${API_BASE_URL}/categories/?include_inactive=${includeInactive}`);
+    },
+    
+    async getCategory(id) {
+        console.log('API: Get category', id);
+        return await fetchWithRetry(`${API_BASE_URL}/categories/${id}`);
+    },
+    
+    async createCategory(data) {
+        console.log('API: Create category', data);
+        return await fetchWithRetry(`${API_BASE_URL}/categories/`, {
+            method: 'POST',
+            body: JSON.stringify(data),
+        });
+    },
+    
+    async updateCategory(id, data) {
+        console.log('API: Update category', id, data);
+        return await fetchWithRetry(`${API_BASE_URL}/categories/${id}`, {
+            method: 'PUT',
+            body: JSON.stringify(data),
+        });
+    },
+    
+    async deleteCategory(id) {
+        console.log('API: Delete category', id);
+        return await fetchWithRetry(`${API_BASE_URL}/categories/${id}`, {
+            method: 'DELETE',
+        });
+    },
 };

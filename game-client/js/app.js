@@ -364,6 +364,18 @@ class QuizApp {
             currentQuestionEl.textContent = this.currentQuestionIndex + 1;
         }
         
+        // Update category tag
+        const categoryEl = document.getElementById('questionCategory');
+        if (categoryEl) {
+            if (question.category) {
+                categoryEl.textContent = question.category.name;
+                categoryEl.style.backgroundColor = question.category.color;
+            } else {
+                categoryEl.textContent = 'Generic';
+                categoryEl.style.backgroundColor = '#6c757d';
+            }
+        }
+        
         // Update question text
         const questionText = lang === 'fr' ? question.question_text_fr : question.question_text_en;
         const questionTextEl = document.getElementById('questionText');
@@ -601,6 +613,14 @@ class QuizApp {
                 statusClass = 'unanswered';
             }
             
+            // Category tag
+            let categoryTag = '';
+            if (item.category) {
+                categoryTag = `<span class="review-category-tag" style="background-color: ${item.category.color}">${item.category.name}</span>`;
+            } else {
+                categoryTag = `<span class="review-category-tag" style="background-color: #6c757d">Generic</span>`;
+            }
+            
             // Build answer display - only show correct answer if wrong or unanswered
             let answerHTML = '';
             if (item.is_correct === true) {
@@ -628,6 +648,7 @@ class QuizApp {
             reviewItem.innerHTML = `
                 <div class="review-header">
                     <div class="review-question">${index + 1}. ${questionText}</div>
+                    ${categoryTag}
                     <span class="review-status ${statusClass}">${statusText}</span>
                 </div>
                 <div class="review-answers">

@@ -10,8 +10,11 @@ class AdminApp {
         this.allQuestions = []; // Store all questions before filtering
         this.results = []; // Store results for sorting
         this.allResults = []; // Store all results before filtering
+        this.categories = []; // Store categories
         this.sortColumn = 'id';
         this.sortDirection = 'desc';
+        this.questionSortColumn = 'id';
+        this.questionSortDirection = 'desc';
         this.filters = {
             search: '',
             minScore: null,
@@ -20,8 +23,13 @@ class AdminApp {
         this.questionFilters = {
             search: '',
             type: '',
-            status: ''
+            status: '',
+            category: ''
         };
+        this.editingCategory = null;
+        this.categoryDistribution = {};
+        this.categorySortColumn = 'id';
+        this.categorySortDirection = 'asc';
         this.init();
     }
     
@@ -91,6 +99,12 @@ class AdminApp {
             this.clearQuestionFilters();
         });
         
+        // Category filter
+        document.getElementById('questionCategoryFilter')?.addEventListener('change', (e) => {
+            this.questionFilters.category = e.target.value;
+            this.applyQuestionFilters();
+        });
+        
         // Question modal
         document.getElementById('closeModal')?.addEventListener('click', () => {
             this.hideQuestionModal();
@@ -139,6 +153,36 @@ class AdminApp {
         document.getElementById('settingsForm')?.addEventListener('submit', async (e) => {
             e.preventDefault();
             await this.handleSettingsSubmit();
+        });
+        
+        // Category management
+        document.getElementById('addCategoryButton')?.addEventListener('click', () => {
+            this.showCategoryModal();
+        });
+        
+        document.getElementById('closeCategoryModal')?.addEventListener('click', () => {
+            this.hideCategoryModal();
+        });
+        
+        document.getElementById('cancelCategoryModal')?.addEventListener('click', () => {
+            this.hideCategoryModal();
+        });
+        
+        document.getElementById('categoryForm')?.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            await this.handleCategorySubmit();
+        });
+        
+        // Color picker sync
+        document.getElementById('categoryColor')?.addEventListener('input', (e) => {
+            document.getElementById('categoryColorText').value = e.target.value.toUpperCase();
+        });
+        
+        document.getElementById('categoryColorText')?.addEventListener('input', (e) => {
+            const value = e.target.value;
+            if (/^#[0-9A-Fa-f]{6}$/.test(value)) {
+                document.getElementById('categoryColor').value = value;
+            }
         });
     }
     
@@ -199,12 +243,17 @@ class AdminApp {
     async loadView(viewName) {
         switch (viewName) {
             case 'questions':
+                await this.loadCategories(); // Load categories first for filter
                 await this.loadQuestions();
+                break;
+            case 'categories':
+                await this.loadCategoriesView();
                 break;
             case 'results':
                 await this.loadResults();
                 break;
             case 'settings':
+                await this.loadCategories(); // Load for distribution
                 await this.loadSettings();
                 break;
         }
@@ -215,16 +264,56 @@ class AdminApp {
         const tbody = document.getElementById('questionsTableBody');
         if (!tbody) return;
         
-        tbody.innerHTML = '<tr><td colspan="6" class="loading"><i class="ph ph-circle-notch ph-spin"></i> Loading questions...</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="7" class="loading"><i class="ph ph-circle-notch ph-spin"></i> Loading questions...</td></tr>';
         
         try {
             this.allQuestions = await api.getQuestions(true);
             this.questions = [...this.allQuestions];
             this.displayQuestions();
+            this.populateCategoryFilter();
         } catch (error) {
             console.error('Failed to load questions:', error);
-            tbody.innerHTML = '<tr><td colspan="6" class="loading">Error loading questions</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="7" class="loading">Error loading questions</td></tr>';
             this.showToast('Failed to load questions', 'error');
+        }
+    }
+    
+    // Load categories for filters and dropdowns
+    async loadCategories() {
+        try {
+            this.categories = await api.getCategories(true);
+            this.populateCategoryDropdowns();
+        } catch (error) {
+            console.error('Failed to load categories:', error);
+            this.categories = [];
+        }
+    }
+    
+    populateCategoryFilter() {
+        const filter = document.getElementById('questionCategoryFilter');
+        if (!filter) return;
+        
+        // Keep "All" option
+        filter.innerHTML = '<option value="">All</option>';
+        filter.innerHTML += '<option value="none">No Category</option>';
+        
+        this.categories.forEach(cat => {
+            if (cat.is_active) {
+                filter.innerHTML += `<option value="${cat.id}">${cat.name}</option>`;
+            }
+        });
+    }
+    
+    populateCategoryDropdowns() {
+        // Question form dropdown
+        const questionCategorySelect = document.getElementById('questionCategory');
+        if (questionCategorySelect) {
+            questionCategorySelect.innerHTML = '<option value="">No Category</option>';
+            this.categories.forEach(cat => {
+                if (cat.is_active) {
+                    questionCategorySelect.innerHTML += `<option value="${cat.id}">${cat.name}</option>`;
+                }
+            });
         }
     }
     
@@ -251,15 +340,26 @@ class AdminApp {
             filtered = filtered.filter(q => q.is_active === isActive);
         }
         
+        // Category filter
+        if (this.questionFilters.category !== '') {
+            if (this.questionFilters.category === 'none') {
+                filtered = filtered.filter(q => !q.category_id);
+            } else {
+                const catId = parseInt(this.questionFilters.category);
+                filtered = filtered.filter(q => q.category_id === catId);
+            }
+        }
+        
         this.questions = filtered;
         this.displayQuestions();
     }
     
     clearQuestionFilters() {
-        this.questionFilters = { search: '', type: '', status: '' };
+        this.questionFilters = { search: '', type: '', status: '', category: '' };
         document.getElementById('questionSearchInput').value = '';
         document.getElementById('questionTypeFilter').value = '';
         document.getElementById('questionStatusFilter').value = '';
+        document.getElementById('questionCategoryFilter').value = '';
         this.questions = [...this.allQuestions];
         this.displayQuestions();
     }
@@ -269,16 +369,62 @@ class AdminApp {
         if (!tbody) return;
         
         if (this.questions.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="6" class="loading">No questions found</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="7" class="loading">No questions found</td></tr>';
             return;
         }
         
+        // Sort questions
+        const sorted = [...this.questions].sort((a, b) => {
+            let aVal, bVal;
+            
+            switch(this.questionSortColumn) {
+                case 'id':
+                    aVal = a.id;
+                    bVal = b.id;
+                    break;
+                case 'question':
+                    aVal = a.question_text_en.toLowerCase();
+                    bVal = b.question_text_en.toLowerCase();
+                    break;
+                case 'category':
+                    aVal = a.category?.name?.toLowerCase() || 'zzz';
+                    bVal = b.category?.name?.toLowerCase() || 'zzz';
+                    break;
+                case 'type':
+                    aVal = a.question_type;
+                    bVal = b.question_type;
+                    break;
+                case 'answer':
+                    aVal = a.correct_answer;
+                    bVal = b.correct_answer;
+                    break;
+                case 'status':
+                    aVal = a.is_active ? 1 : 0;
+                    bVal = b.is_active ? 1 : 0;
+                    break;
+                default:
+                    return 0;
+            }
+            
+            if (aVal < bVal) return this.questionSortDirection === 'asc' ? -1 : 1;
+            if (aVal > bVal) return this.questionSortDirection === 'asc' ? 1 : -1;
+            return 0;
+        });
+        
         tbody.innerHTML = '';
-        this.questions.forEach(q => {
+        sorted.forEach(q => {
             const row = document.createElement('tr');
+            
+            // Build category tag
+            let categoryHtml = '<span class="category-tag category-tag-none">None</span>';
+            if (q.category) {
+                categoryHtml = `<span class="category-tag" style="background-color: ${q.category.color}">${q.category.name}</span>`;
+            }
+            
             row.innerHTML = `
                 <td>${q.id}</td>
                 <td>${q.question_text_en.substring(0, 60)}...</td>
+                <td>${categoryHtml}</td>
                 <td>${q.question_type}</td>
                 <td>${q.correct_answer}</td>
                 <td><span class="status-badge ${q.is_active ? 'active' : 'inactive'}">${q.is_active ? 'Active' : 'Inactive'}</span></td>
@@ -295,6 +441,41 @@ class AdminApp {
             `;
             tbody.appendChild(row);
         });
+        
+        this.updateQuestionSortIndicators();
+    }
+    
+    sortQuestions(column) {
+        if (this.questionSortColumn === column) {
+            this.questionSortDirection = this.questionSortDirection === 'asc' ? 'desc' : 'asc';
+        } else {
+            this.questionSortColumn = column;
+            this.questionSortDirection = 'desc';
+        }
+        this.displayQuestions();
+    }
+    
+    updateQuestionSortIndicators() {
+        document.querySelectorAll('#questionsView th').forEach(th => {
+            th.classList.remove('sort-asc', 'sort-desc');
+        });
+        
+        const sortMap = {
+            'id': 0,
+            'question': 1,
+            'category': 2,
+            'type': 3,
+            'answer': 4,
+            'status': 5
+        };
+        
+        const index = sortMap[this.questionSortColumn];
+        if (index !== undefined) {
+            const headers = document.querySelectorAll('#questionsView th');
+            if (headers[index]) {
+                headers[index].classList.add(this.questionSortDirection === 'asc' ? 'sort-asc' : 'sort-desc');
+            }
+        }
     }
     
     showQuestionModal(question = null) {
@@ -302,6 +483,9 @@ class AdminApp {
         const modal = document.getElementById('questionModal');
         const title = document.getElementById('modalTitle');
         const form = document.getElementById('questionForm');
+        
+        // Ensure category dropdown is populated
+        this.populateCategoryDropdowns();
         
         if (question) {
             title.textContent = 'Edit Question';
@@ -319,10 +503,12 @@ class AdminApp {
             document.getElementById('explanationEn').value = question.explanation_en || '';
             document.getElementById('explanationFr').value = question.explanation_fr || '';
             document.getElementById('isActive').checked = question.is_active;
+            document.getElementById('questionCategory').value = question.category_id || '';
         } else {
             title.textContent = 'Add Question';
             form.reset();
             document.getElementById('questionId').value = '';
+            document.getElementById('questionCategory').value = '';
         }
         
         modal.style.display = 'flex';
@@ -350,6 +536,8 @@ class AdminApp {
         const form = document.getElementById('questionForm');
         const formData = new FormData(form);
         
+        const categoryValue = formData.get('category_id');
+        
         const data = {
             question_text_en: formData.get('question_text_en'),
             question_text_fr: formData.get('question_text_fr'),
@@ -364,6 +552,7 @@ class AdminApp {
             explanation_en: formData.get('explanation_en') || null,
             explanation_fr: formData.get('explanation_fr') || null,
             is_active: formData.get('is_active') === 'on',
+            category_id: categoryValue ? parseInt(categoryValue) : null,
         };
         
         try {
@@ -401,6 +590,229 @@ class AdminApp {
         } catch (error) {
             console.error('Failed to delete question:', error);
             this.showToast('Failed to delete question', 'error');
+        } finally {
+            this.setLoading(false);
+        }
+    }
+    
+    // Categories Management
+    async loadCategoriesView() {
+        const tbody = document.getElementById('categoriesTableBody');
+        if (!tbody) return;
+        
+        tbody.innerHTML = '<tr><td colspan="7" class="loading"><i class="ph ph-circle-notch ph-spin"></i> Loading categories...</td></tr>';
+        
+        try {
+            this.categories = await api.getCategories(true);
+            this.displayCategories();
+        } catch (error) {
+            console.error('Failed to load categories:', error);
+            tbody.innerHTML = '<tr><td colspan="7" class="loading">Error loading categories</td></tr>';
+            this.showToast('Failed to load categories', 'error');
+        }
+    }
+    
+    displayCategories() {
+        const tbody = document.getElementById('categoriesTableBody');
+        if (!tbody) return;
+        
+        if (this.categories.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="7" class="loading">No categories found. Create your first category!</td></tr>';
+            return;
+        }
+        
+        // Sort categories
+        const sorted = [...this.categories].sort((a, b) => {
+            let aVal, bVal;
+            
+            switch(this.categorySortColumn) {
+                case 'id':
+                    aVal = a.id;
+                    bVal = b.id;
+                    break;
+                case 'name':
+                    aVal = a.name.toLowerCase();
+                    bVal = b.name.toLowerCase();
+                    break;
+                case 'color':
+                    aVal = a.color;
+                    bVal = b.color;
+                    break;
+                case 'questions':
+                    aVal = a.question_count || 0;
+                    bVal = b.question_count || 0;
+                    break;
+                case 'status':
+                    aVal = a.is_active ? 1 : 0;
+                    bVal = b.is_active ? 1 : 0;
+                    break;
+                default:
+                    return 0;
+            }
+            
+            if (aVal < bVal) return this.categorySortDirection === 'asc' ? -1 : 1;
+            if (aVal > bVal) return this.categorySortDirection === 'asc' ? 1 : -1;
+            return 0;
+        });
+        
+        tbody.innerHTML = '';
+        sorted.forEach(cat => {
+            const row = document.createElement('tr');
+            
+            row.innerHTML = `
+                <td>${cat.id}</td>
+                <td><span class="category-color-badge" style="background-color: ${cat.color}"></span></td>
+                <td><strong>${cat.name}</strong></td>
+                <td>${cat.description || '<span class="text-muted">No description</span>'}</td>
+                <td>${cat.question_count || 0}</td>
+                <td><span class="status-badge ${cat.is_active ? 'active' : 'inactive'}">${cat.is_active ? 'Active' : 'Inactive'}</span></td>
+                <td class="action-buttons">
+                    <button class="btn btn-small btn-secondary" onclick="window.adminApp.editCategory(${cat.id})">
+                        <i class="ph ph-pencil"></i>
+                        Edit
+                    </button>
+                    <button class="btn btn-small btn-danger" onclick="window.adminApp.deleteCategory(${cat.id})">
+                        <i class="ph ph-trash"></i>
+                        Delete
+                    </button>
+                </td>
+            `;
+            tbody.appendChild(row);
+        });
+        
+        this.updateCategorySortIndicators();
+    }
+    
+    sortCategories(column) {
+        if (this.categorySortColumn === column) {
+            this.categorySortDirection = this.categorySortDirection === 'asc' ? 'desc' : 'asc';
+        } else {
+            this.categorySortColumn = column;
+            this.categorySortDirection = 'asc';
+        }
+        this.displayCategories();
+    }
+    
+    updateCategorySortIndicators() {
+        document.querySelectorAll('#categoriesView th').forEach(th => {
+            th.classList.remove('sort-asc', 'sort-desc');
+        });
+        
+        const sortMap = {
+            'id': 0,
+            'color': 1,
+            'name': 2,
+            'questions': 4,
+            'status': 5
+        };
+        
+        const index = sortMap[this.categorySortColumn];
+        if (index !== undefined) {
+            const headers = document.querySelectorAll('#categoriesView th');
+            if (headers[index]) {
+                headers[index].classList.add(this.categorySortDirection === 'asc' ? 'sort-asc' : 'sort-desc');
+            }
+        }
+    }
+    
+    showCategoryModal(category = null) {
+        this.editingCategory = category;
+        const modal = document.getElementById('categoryModal');
+        const title = document.getElementById('categoryModalTitle');
+        const form = document.getElementById('categoryForm');
+        
+        if (category) {
+            title.textContent = 'Edit Category';
+            document.getElementById('categoryId').value = category.id;
+            document.getElementById('categoryName').value = category.name;
+            document.getElementById('categoryDescription').value = category.description || '';
+            document.getElementById('categoryColor').value = category.color;
+            document.getElementById('categoryColorText').value = category.color.toUpperCase();
+            document.getElementById('categoryIsActive').checked = category.is_active;
+        } else {
+            title.textContent = 'Add Category';
+            form.reset();
+            document.getElementById('categoryId').value = '';
+            document.getElementById('categoryColor').value = '#FC5607';
+            document.getElementById('categoryColorText').value = '#FC5607';
+            document.getElementById('categoryIsActive').checked = true;
+        }
+        
+        modal.style.display = 'flex';
+    }
+    
+    hideCategoryModal() {
+        document.getElementById('categoryModal').style.display = 'none';
+        this.editingCategory = null;
+    }
+    
+    async editCategory(id) {
+        try {
+            this.setLoading(true);
+            const category = await api.getCategory(id);
+            this.showCategoryModal(category);
+        } catch (error) {
+            console.error('Failed to load category:', error);
+            this.showToast('Failed to load category', 'error');
+        } finally {
+            this.setLoading(false);
+        }
+    }
+    
+    async handleCategorySubmit() {
+        const form = document.getElementById('categoryForm');
+        const formData = new FormData(form);
+        
+        const data = {
+            name: formData.get('name'),
+            description: formData.get('description') || null,
+            color: formData.get('color'),
+            is_active: formData.get('is_active') === 'on',
+        };
+        
+        try {
+            this.setLoading(true);
+            const categoryId = document.getElementById('categoryId').value;
+            
+            if (categoryId) {
+                await api.updateCategory(categoryId, data);
+                this.showToast('Category updated successfully');
+            } else {
+                await api.createCategory(data);
+                this.showToast('Category created successfully');
+            }
+            
+            this.hideCategoryModal();
+            await this.loadCategoriesView();
+        } catch (error) {
+            console.error('Failed to save category:', error);
+            this.showToast('Failed to save category', 'error');
+        } finally {
+            this.setLoading(false);
+        }
+    }
+    
+    async deleteCategory(id) {
+        const category = this.categories.find(c => c.id === id);
+        const questionCount = category?.question_count || 0;
+        
+        let message = 'Are you sure you want to delete this category?';
+        if (questionCount > 0) {
+            message += `\n\nThis category has ${questionCount} question(s). They will be set to "No Category".`;
+        }
+        
+        if (!confirm(message)) {
+            return;
+        }
+        
+        try {
+            this.setLoading(true);
+            await api.deleteCategory(id);
+            this.showToast('Category deleted successfully');
+            await this.loadCategoriesView();
+        } catch (error) {
+            console.error('Failed to delete category:', error);
+            this.showToast('Failed to delete category', 'error');
         } finally {
             this.setLoading(false);
         }
@@ -619,6 +1031,14 @@ class AdminApp {
             const greenText = question ? question.green_label_en : 'Green';
             const redText = question ? question.red_label_en : 'Red';
             
+            // Category tag
+            let categoryTag = '';
+            if (question && question.category) {
+                categoryTag = `<span class="result-category-badge" style="background-color: ${question.category.color}">${question.category.name}</span>`;
+            } else {
+                categoryTag = `<span class="result-category-badge" style="background-color: #6c757d">Generic</span>`;
+            }
+            
             const playerAnswerText = answer.player_answer === 'green' ? 
                 `🟢 ${greenText}` : 
                 (answer.player_answer === 'red' ? `🔴 ${redText}` : 'None');
@@ -631,6 +1051,7 @@ class AdminApp {
                 <div class="${className}">
                     <div class="answer-header">
                         <strong>Question ${index + 1}</strong>
+                        ${categoryTag}
                         <span class="answer-status">${answer.is_correct === true ? '✓ Correct' : answer.is_correct === false ? '✗ Wrong' : '- Unanswered'}</span>
                     </div>
                     <div class="answer-question">${questionText}</div>
@@ -684,9 +1105,89 @@ class AdminApp {
             document.getElementById('pointsCorrect').value = settings.points_correct;
             document.getElementById('pointsWrong').value = settings.points_wrong;
             document.getElementById('timeBonusMax').value = settings.time_bonus_max;
+            
+            // Load category distribution
+            this.categoryDistribution = settings.category_distribution || {};
+            this.renderCategoryDistribution();
         } catch (error) {
             console.error('Failed to load settings:', error);
             this.showToast('Failed to load settings', 'error');
+        }
+    }
+    
+    renderCategoryDistribution() {
+        const container = document.getElementById('categoryDistributionContainer');
+        if (!container) return;
+        
+        if (this.categories.length === 0) {
+            container.innerHTML = '<div class="loading">No categories available. Create categories first.</div>';
+            return;
+        }
+        
+        container.innerHTML = '';
+        
+        // Only show active categories
+        const activeCategories = this.categories.filter(c => c.is_active);
+        
+        if (activeCategories.length === 0) {
+            container.innerHTML = '<div class="loading">No active categories. Activate or create categories first.</div>';
+            return;
+        }
+        
+        activeCategories.forEach(cat => {
+            const item = document.createElement('div');
+            item.className = 'category-distribution-item';
+            
+            const currentValue = this.categoryDistribution[cat.id.toString()] || 0;
+            
+            item.innerHTML = `
+                <div class="category-color" style="background-color: ${cat.color}"></div>
+                <span class="category-name">${cat.name}</span>
+                <span class="category-questions">(${cat.question_count || 0} questions)</span>
+                <div class="category-percentage">
+                    <input type="number" 
+                           id="dist-${cat.id}" 
+                           data-category-id="${cat.id}"
+                           min="0" 
+                           max="100" 
+                           value="${currentValue}"
+                           onchange="window.adminApp.updateDistributionTotal()">
+                    <span>%</span>
+                </div>
+            `;
+            container.appendChild(item);
+        });
+        
+        this.updateDistributionTotal();
+    }
+    
+    updateDistributionTotal() {
+        let total = 0;
+        const activeCategories = this.categories.filter(c => c.is_active);
+        
+        activeCategories.forEach(cat => {
+            const input = document.getElementById(`dist-${cat.id}`);
+            if (input) {
+                total += parseInt(input.value) || 0;
+            }
+        });
+        
+        const totalEl = document.getElementById('distributionTotal');
+        const statusEl = document.getElementById('distributionStatus');
+        
+        if (totalEl) totalEl.textContent = `${total}%`;
+        
+        if (statusEl) {
+            if (total === 100) {
+                statusEl.textContent = '✓ Valid';
+                statusEl.className = 'distribution-status valid';
+            } else if (total === 0) {
+                statusEl.textContent = '(Random distribution)';
+                statusEl.className = 'distribution-status';
+            } else {
+                statusEl.textContent = `✗ Must equal 100% or 0%`;
+                statusEl.className = 'distribution-status invalid';
+            }
         }
     }
     
@@ -694,18 +1195,38 @@ class AdminApp {
         const form = document.getElementById('settingsForm');
         const formData = new FormData(form);
         
+        // Get category distribution
+        const distribution = {};
+        const activeCategories = this.categories.filter(c => c.is_active);
+        let total = 0;
+        activeCategories.forEach(cat => {
+            const input = document.getElementById(`dist-${cat.id}`);
+            if (input) {
+                const value = parseInt(input.value) || 0;
+                if (value > 0) {
+                    distribution[cat.id.toString()] = value;
+                }
+                total += value;
+            }
+        });
+        
+        // If total is 0, clear distribution (random)
+        const finalDistribution = total === 0 ? null : distribution;
+        
         const data = {
             questions_per_game: parseInt(formData.get('questions_per_game')),
             timer_seconds: parseInt(formData.get('timer_seconds')),
             points_correct: parseInt(formData.get('points_correct')),
             points_wrong: parseInt(formData.get('points_wrong')),
             time_bonus_max: parseInt(formData.get('time_bonus_max')),
+            category_distribution: finalDistribution,
         };
         
         try {
             this.setLoading(true);
             await api.updateSettings(data);
-            this.showToast('Settings updated successfully');
+            this.categoryDistribution = finalDistribution || {};
+            this.showToast('Settings saved successfully');
         } catch (error) {
             console.error('Failed to update settings:', error);
             this.showToast('Failed to update settings', 'error');

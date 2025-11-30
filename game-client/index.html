@@ -54,7 +54,7 @@
         <div id="homePage" class="page active">
             <div class="hero centered-hero">
                 <h1 class="hero-title holographic" data-text="Become THE Ultimate API Master!" data-i18n="home.title">Become THE Ultimate API Master!</h1>
-                <p class="hero-subtitle" data-i18n="home.subtitle">Test your knowledge about APIs, AI, MCP, A2A, and Gravitee</p>
+                <p class="hero-subtitle" data-i18n="home.subtitle">Test your knowledge about APIs, Events, AI, MCP, A2A, and Gravitee</p>
                 <button id="playButton" class="btn btn-primary btn-large" data-i18n="home.playButton">Play</button>
             </div>
         </div>
@@ -86,7 +86,7 @@
             <div class="rules-container">
                 <h2 data-i18n="rules.title">Game Rules</h2>
                 <div class="rules-content">
-                    <p data-i18n="rules.intro">Welcome to API Masters! Here's how to become THE API Master:</p>
+                    <p data-i18n="rules.intro">How to play:</p>
                     <ul class="rules-list">
                         <li data-i18n="rules.rule1">You will answer 15 questions</li>
                         <li data-i18n="rules.rule2">Each question has 20 seconds timer</li>
@@ -111,7 +111,8 @@
             <div class="game-container">
                 <div class="game-header">
                     <div class="game-progress">
-                        <span data-i18n="game.question">Question</span> <span id="currentQuestion">1</span> / <span id="totalQuestions">15</span>
+                        <div class="game-progress-question"><span data-i18n="game.question">Question</span> <span id="currentQuestion">1</span> / <span id="totalQuestions">15</span></div>
+                        <div id="questionCategory" class="question-category-tag">Generic</div>
                     </div>
                     <div class="game-timer">
                         <svg class="timer-ring" width="80" height="80">

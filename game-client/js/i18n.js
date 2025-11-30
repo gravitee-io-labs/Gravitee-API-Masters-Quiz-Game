@@ -7,7 +7,7 @@ const translations = {
     en: {
         // Home page
         'home.title': 'Become THE Ultimate API Master!',
-        'home.subtitle': 'Test your knowledge about APIs, AI, MCP, A2A, and Gravitee',
+        'home.subtitle': 'Test your knowledge about APIs, Events, AI, MCP, A2A, and Gravitee',
         'home.playButton': 'Play',
         
         // Registration
@@ -19,7 +19,7 @@ const translations = {
         
         // Rules
         'rules.title': 'Game Rules',
-        'rules.intro': "Welcome to API Masters! Here's how to become THE API Master:",
+        'rules.intro': 'How to play:',
         'rules.rule1': 'You will answer 15 questions',
         'rules.rule2': 'Each question has 20 seconds timer',
         'rules.rule3': 'Answer using the physical Green or Red buttons',
@@ -80,7 +80,7 @@ const translations = {
     fr: {
         // Home page
         'home.title': 'Devenez LE Maître Ultime des API !',
-        'home.subtitle': 'Testez vos connaissances sur les API, IA, MCP, A2A et Gravitee',
+        'home.subtitle': 'Testez vos connaissances sur les API, Évènements, IA, MCP, A2A et Gravitee',
         'home.playButton': 'Jouer',
         
         // Registration
@@ -92,7 +92,7 @@ const translations = {
         
         // Rules
         'rules.title': 'Règles du Jeu',
-        'rules.intro': "Bienvenue à API Masters ! Voici comment devenir LE Maître des API :",
+        'rules.intro': 'Comment jouer :',
         'rules.rule1': 'Vous répondrez à 15 questions',
         'rules.rule2': 'Chaque question a un minuteur de 20 secondes',
         'rules.rule3': 'Répondez en utilisant les boutons physiques Vert ou Rouge',

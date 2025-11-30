@@ -21,6 +21,39 @@ class UserLogin(BaseModel):
     password: str
 
 
+# Category schemas
+class CategoryBase(BaseModel):
+    name: str = Field(..., min_length=1, max_length=100)
+    description: Optional[str] = None
+    color: str = Field(default="#FC5607", pattern="^#[0-9A-Fa-f]{6}$")
+    is_active: bool = True
+
+
+class CategoryCreate(CategoryBase):
+    pass
+
+
+class CategoryUpdate(BaseModel):
+    name: Optional[str] = Field(None, min_length=1, max_length=100)
+    description: Optional[str] = None
+    color: Optional[str] = Field(None, pattern="^#[0-9A-Fa-f]{6}$")
+    is_active: Optional[bool] = None
+
+
+class CategoryResponse(CategoryBase):
+    id: int
+    created_at: datetime
+    updated_at: datetime
+    
+    class Config:
+        from_attributes = True
+
+
+class CategoryWithCount(CategoryResponse):
+    """Category with question count"""
+    question_count: int = 0
+
+
 # Player schemas
 class PlayerCreate(BaseModel):
     first_name: str = Field(..., min_length=1, max_length=100)
@@ -62,6 +95,7 @@ class QuestionCreate(BaseModel):
     explanation_fr: Optional[str] = None
     is_active: bool = True
     difficulty: int = Field(default=1, ge=1, le=5)
+    category_id: Optional[int] = None
 
 
 class QuestionUpdate(BaseModel):
@@ -78,6 +112,7 @@ class QuestionUpdate(BaseModel):
     explanation_fr: Optional[str] = None
     is_active: Optional[bool] = None
     difficulty: Optional[int] = Field(None, ge=1, le=5)
+    category_id: Optional[int] = None
 
 
 class QuestionResponse(BaseModel):
@@ -95,6 +130,8 @@ class QuestionResponse(BaseModel):
     explanation_fr: Optional[str]
     is_active: bool
     difficulty: int
+    category_id: Optional[int]
+    category: Optional[CategoryResponse] = None
     created_at: datetime
     updated_at: datetime
     
@@ -115,6 +152,8 @@ class QuestionForGame(BaseModel):
     green_label_fr: str
     red_label_en: str
     red_label_fr: str
+    category_id: Optional[int]
+    category: Optional[CategoryResponse] = None
     
     class Config:
         from_attributes = True
@@ -208,6 +247,8 @@ class GameReview(BaseModel):
     green_label_fr: str
     red_label_en: str
     red_label_fr: str
+    category_id: Optional[int] = None
+    category: Optional[CategoryResponse] = None
 
 
 class GameCompleteResponse(BaseModel):
@@ -241,6 +282,7 @@ class GameSettingsUpdate(BaseModel):
     points_correct: Optional[int] = Field(None, ge=0)
     points_wrong: Optional[int] = Field(None, ge=0)
     time_bonus_max: Optional[int] = Field(None, ge=0)
+    category_distribution: Optional[Dict[str, int]] = None  # {"category_id": percentage}
 
 
 class GameSettingsResponse(BaseModel):
@@ -250,6 +292,7 @@ class GameSettingsResponse(BaseModel):
     points_correct: int
     points_wrong: int
     time_bonus_max: int
+    category_distribution: Optional[Dict[str, int]] = None
     updated_at: datetime
     
     class Config:

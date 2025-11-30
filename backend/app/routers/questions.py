@@ -4,7 +4,7 @@ Questions router - CRUD operations for quiz questions
 import logging
 from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.database import get_db
 from app.models import Question
@@ -21,17 +21,20 @@ async def get_all_questions(
     skip: int = 0,
     limit: int = 100,
     include_inactive: bool = False,
+    category_id: int = None,
     db: Session = Depends(get_db),
     _: None = Depends(require_admin)
 ):
     """
     Get all questions (admin only)
     """
-    logger.info(f"Fetching questions (skip={skip}, limit={limit}, include_inactive={include_inactive})")
+    logger.info(f"Fetching questions (skip={skip}, limit={limit}, include_inactive={include_inactive}, category_id={category_id})")
     
-    query = db.query(Question)
+    query = db.query(Question).options(joinedload(Question.category))
     if not include_inactive:
         query = query.filter(Question.is_active == True)
+    if category_id is not None:
+        query = query.filter(Question.category_id == category_id)
     
     questions = query.offset(skip).limit(limit).all()
     logger.info(f"Retrieved {len(questions)} questions")
@@ -50,7 +53,9 @@ async def get_question(
     """
     logger.info(f"Fetching question with ID: {question_id}")
     
-    question = db.query(Question).filter(Question.id == question_id).first()
+    question = db.query(Question).options(
+        joinedload(Question.category)
+    ).filter(Question.id == question_id).first()
     if not question:
         logger.warning(f"Question not found: {question_id}")
         raise HTTPException(

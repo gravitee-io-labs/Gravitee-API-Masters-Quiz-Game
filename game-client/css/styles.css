@@ -567,6 +567,24 @@ body {
 .game-progress {
     font-size: 1.25rem;
     font-weight: 500;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.game-progress-question {
+    white-space: nowrap;
+}
+
+.game-progress .question-category-tag {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.25rem 0.75rem;
+    border-radius: 12px;
+    font-size: 0.8rem;
+    font-weight: 500;
+    color: white;
+    width: fit-content;
 }
 
 .game-timer {
@@ -603,9 +621,22 @@ body {
     margin-bottom: 2rem;
     min-height: 200px;
     display: flex;
+    flex-direction: column;
     align-items: center;
     justify-content: center;
     text-align: center;
+}
+
+.question-category-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    padding: 0.375rem 0.875rem;
+    border-radius: 16px;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: white;
+    margin-bottom: 1rem;
 }
 
 .question-text {
@@ -784,12 +815,25 @@ body {
     align-items: flex-start;
     margin-bottom: 1rem;
     gap: 1rem;
+    flex-wrap: wrap;
 }
 
 .review-question {
     font-weight: 600;
     font-size: 1.1rem;
     flex: 1;
+}
+
+.review-category-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    padding: 0.25rem 0.625rem;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: white;
+    white-space: nowrap;
 }
 
 .review-status {

@@ -69,6 +69,10 @@
                     <i class="ph ph-question nav-icon"></i>
                     Questions
                 </a></li>
+                <li><a href="#categories" class="nav-link" data-view="categories">
+                    <i class="ph ph-tag nav-icon"></i>
+                    Categories
+                </a></li>
                 <li><a href="#results" class="nav-link" data-view="results">
                     <i class="ph ph-chart-bar nav-icon"></i>
                     Results
@@ -99,6 +103,12 @@
                         <input type="text" id="questionSearchInput" placeholder="Search questions..." class="filter-input">
                     </div>
                     <div class="filter-group">
+                        <label for="questionCategoryFilter">Category:</label>
+                        <select id="questionCategoryFilter" class="filter-select">
+                            <option value="">All</option>
+                        </select>
+                    </div>
+                    <div class="filter-group">
                         <label for="questionTypeFilter">Type:</label>
                         <select id="questionTypeFilter" class="filter-select">
                             <option value="">All</option>
@@ -125,16 +135,47 @@
                     <table class="data-table">
                         <thead>
                             <tr>
-                                <th>ID</th>
-                                <th>Question (EN)</th>
-                                <th>Type</th>
-                                <th>Answer</th>
-                                <th>Status</th>
+                                <th class="sortable" onclick="window.adminApp.sortQuestions('id')">ID</th>
+                                <th class="sortable" onclick="window.adminApp.sortQuestions('question')">Question (EN)</th>
+                                <th class="sortable" onclick="window.adminApp.sortQuestions('category')">Category</th>
+                                <th class="sortable" onclick="window.adminApp.sortQuestions('type')">Type</th>
+                                <th class="sortable" onclick="window.adminApp.sortQuestions('answer')">Answer</th>
+                                <th class="sortable" onclick="window.adminApp.sortQuestions('status')">Status</th>
                                 <th>Actions</th>
                             </tr>
                         </thead>
                         <tbody id="questionsTableBody">
-                            <tr><td colspan="6" class="loading">Loading...</td></tr>
+                            <tr><td colspan="7" class="loading">Loading...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Categories View -->
+            <div id="categoriesView" class="content-view">
+                <div class="view-header">
+                    <h2>Categories Management</h2>
+                    <button id="addCategoryButton" class="btn btn-primary">
+                        <i class="ph ph-plus"></i>
+                        Add Category
+                    </button>
+                </div>
+                
+                <div class="table-container">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th class="sortable" onclick="window.adminApp.sortCategories('id')">ID</th>
+                                <th class="sortable" onclick="window.adminApp.sortCategories('color')">Color</th>
+                                <th class="sortable" onclick="window.adminApp.sortCategories('name')">Name</th>
+                                <th>Description</th>
+                                <th class="sortable" onclick="window.adminApp.sortCategories('questions')">Questions</th>
+                                <th class="sortable" onclick="window.adminApp.sortCategories('status')">Status</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="categoriesTableBody">
+                            <tr><td colspan="7" class="loading">Loading...</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -224,6 +265,19 @@
                                 <input type="number" id="timeBonusMax" name="time_bonus_max" min="0" required>
                                 <small>Maximum bonus points for fast correct answers</small>
                             </div>
+                        
+                        <div class="category-distribution-section">
+                            <h4><i class="ph ph-chart-pie"></i> Category Distribution</h4>
+                            <p>Set the percentage of questions from each category in a game. Total must equal 100%.</p>
+                            <div id="categoryDistributionContainer" class="category-distribution">
+                                <div class="loading">Loading categories...</div>
+                            </div>
+                            <div class="distribution-total">
+                                <span>Total:</span>
+                                <strong id="distributionTotal">0%</strong>
+                                <span id="distributionStatus" class="distribution-status"></span>
+                            </div>
+                        </div>
                             
                             <button type="submit" class="btn btn-primary">Save Settings</button>
                         </form>
@@ -284,7 +338,13 @@
                 </div>
                 
                 <!-- Question Type and Media URL -->
-                <div class="form-row form-row-3">
+                <div class="form-row form-row-4">
+                    <div class="form-group">
+                        <label for="questionCategory">Category</label>
+                        <select id="questionCategory" name="category_id">
+                            <option value="">No Category</option>
+                        </select>
+                    </div>
                     <div class="form-group">
                         <label for="questionType">Question Type *</label>
                         <select id="questionType" name="question_type" required>
@@ -369,6 +429,50 @@
                 <button class="modal-close" id="closeResultModal">&times;</button>
             </div>
             <div id="resultDetails" class="result-details"></div>
+        </div>
+    </div>
+
+    <!-- Category Modal (Add/Edit) -->
+    <div id="categoryModal" class="modal" style="display: none;">
+        <div class="modal-content modal-small">
+            <div class="modal-header">
+                <h3 id="categoryModalTitle">Add Category</h3>
+                <button class="modal-close" id="closeCategoryModal">&times;</button>
+            </div>
+            <form id="categoryForm" class="modal-form">
+                <input type="hidden" id="categoryId" name="id">
+                
+                <div class="form-group">
+                    <label for="categoryName">Name *</label>
+                    <input type="text" id="categoryName" name="name" required maxlength="100">
+                </div>
+                
+                <div class="form-group">
+                    <label for="categoryDescription">Description</label>
+                    <textarea id="categoryDescription" name="description" rows="3"></textarea>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="categoryColor">Color</label>
+                        <div class="color-picker-wrapper">
+                            <input type="color" id="categoryColor" name="color" value="#FC5607">
+                            <input type="text" id="categoryColorText" value="#FC5607" pattern="^#[0-9A-Fa-f]{6}$">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="categoryIsActive" name="is_active" checked>
+                            Active
+                        </label>
+                    </div>
+                </div>
+                
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-secondary" id="cancelCategoryModal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save</button>
+                </div>
+            </form>
         </div>
     </div>
 

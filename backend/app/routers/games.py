@@ -6,14 +6,15 @@ import random
 from typing import List
 from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func
 
 from app.database import get_db
-from app.models import Question, Player, GameSession, GameAnswer, GameSettings
+from app.models import Question, Player, GameSession, GameAnswer, GameSettings, Category
 from app.schemas import (
     PlayerCreate, PlayerResponse, GameSessionStart, GameSessionSubmit,
-    GameSessionResponse, QuestionForGame, GameCompleteResponse, GameReview
+    GameSessionResponse, QuestionForGame, GameCompleteResponse, GameReview,
+    CategoryResponse
 )
 
 logger = logging.getLogger(__name__)
@@ -79,8 +80,10 @@ async def start_game(
             detail="Game settings not configured"
         )
     
-    # Get random active questions
-    all_questions = db.query(Question).filter(Question.is_active == True).all()
+    # Get all active questions with their categories
+    all_questions = db.query(Question).options(
+        joinedload(Question.category)
+    ).filter(Question.is_active == True).all()
     
     if len(all_questions) < game_settings.questions_per_game:
         logger.warning(f"Not enough questions available: {len(all_questions)} < {game_settings.questions_per_game}")
@@ -89,8 +92,12 @@ async def start_game(
             detail=f"Not enough questions available. Need {game_settings.questions_per_game}, found {len(all_questions)}"
         )
     
-    # Randomly select questions
-    selected_questions = random.sample(all_questions, game_settings.questions_per_game)
+    # Select questions based on category distribution
+    selected_questions = select_questions_by_distribution(
+        all_questions,
+        game_settings.questions_per_game,
+        game_settings.category_distribution
+    )
     
     # Create game session
     game_session = GameSession(
@@ -125,10 +132,13 @@ async def start_game(
         db.refresh(game_session)
         logger.info(f"Game session created with ID: {game_session.id}")
         
-        # Return questions without correct answers
-        questions_for_game = [
-            QuestionForGame.model_validate(q) for q in selected_questions
-        ]
+        # Return questions without correct answers, but with category info
+        questions_for_game = []
+        for q in selected_questions:
+            q_data = QuestionForGame.model_validate(q).model_dump()
+            if q.category:
+                q_data['category'] = CategoryResponse.model_validate(q.category).model_dump()
+            questions_for_game.append(q_data)
         
         return {
             "game_session_id": game_session.id,
@@ -142,6 +152,80 @@ async def start_game(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Error starting game"
         )
+
+
+def select_questions_by_distribution(
+    all_questions: List[Question],
+    num_questions: int,
+    category_distribution: dict = None
+) -> List[Question]:
+    """
+    Select questions based on category distribution.
+    
+    Args:
+        all_questions: List of all available questions
+        num_questions: Number of questions to select
+        category_distribution: Dict mapping category_id to percentage (e.g., {"1": 50, "2": 30, "3": 20})
+                              If None or empty, questions are selected randomly from all categories
+    
+    Returns:
+        List of selected questions
+    """
+    if not category_distribution:
+        # No distribution specified - random selection
+        return random.sample(all_questions, num_questions)
+    
+    # Group questions by category
+    questions_by_category = {}
+    uncategorized = []
+    
+    for q in all_questions:
+        if q.category_id:
+            cat_id = str(q.category_id)
+            if cat_id not in questions_by_category:
+                questions_by_category[cat_id] = []
+            questions_by_category[cat_id].append(q)
+        else:
+            uncategorized.append(q)
+    
+    selected = []
+    remaining_needed = num_questions
+    
+    # Calculate questions per category based on distribution
+    questions_per_category = {}
+    total_percentage = sum(category_distribution.values())
+    
+    for cat_id, percentage in category_distribution.items():
+        # Normalize percentage and calculate count
+        normalized = percentage / total_percentage if total_percentage > 0 else 0
+        count = round(num_questions * normalized)
+        questions_per_category[cat_id] = count
+    
+    # Select questions from each category
+    for cat_id, count in questions_per_category.items():
+        if cat_id in questions_by_category:
+            available = questions_by_category[cat_id]
+            actual_count = min(count, len(available))
+            if actual_count > 0:
+                selected.extend(random.sample(available, actual_count))
+                remaining_needed -= actual_count
+    
+    # If we still need more questions, fill from uncategorized or random
+    if remaining_needed > 0:
+        # Collect all unselected questions
+        selected_ids = {q.id for q in selected}
+        remaining_questions = [q for q in all_questions if q.id not in selected_ids]
+        
+        if len(remaining_questions) >= remaining_needed:
+            selected.extend(random.sample(remaining_questions, remaining_needed))
+        else:
+            selected.extend(remaining_questions)
+    
+    # Shuffle to mix categories
+    random.shuffle(selected)
+    
+    # Trim to exact count if over
+    return selected[:num_questions]
 
 
 @router.post("/{game_session_id}/submit", response_model=GameCompleteResponse)
@@ -265,7 +349,7 @@ async def submit_game(
         review = []
         for game_answer in game_session.answers:
             question = game_answer.question
-            review.append(GameReview(
+            review_item = GameReview(
                 question_id=question.id,
                 question_text_en=question.question_text_en,
                 question_text_fr=question.question_text_fr,
@@ -279,8 +363,11 @@ async def submit_game(
                 green_label_en=question.green_label_en,
                 green_label_fr=question.green_label_fr,
                 red_label_en=question.red_label_en,
-                red_label_fr=question.red_label_fr
-            ))
+                red_label_fr=question.red_label_fr,
+                category_id=question.category_id,
+                category=CategoryResponse.model_validate(question.category) if question.category else None
+            )
+            review.append(review_item)
         
         return GameCompleteResponse(
             game_session=GameSessionResponse.model_validate(game_session),

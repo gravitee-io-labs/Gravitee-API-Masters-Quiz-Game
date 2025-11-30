@@ -10,6 +10,24 @@ from sqlalchemy.orm import relationship
 from app.database import Base
 
 
+class Category(Base):
+    """
+    Category model - stores question categories with name, description and color
+    """
+    __tablename__ = "categories"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(100), unique=True, nullable=False)
+    description = Column(Text, nullable=True)
+    color = Column(String(7), default="#FC5607")  # Hex color code
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationships
+    questions = relationship("Question", back_populates="category")
+
+
 class User(Base):
     """
     User model - stores admin users (currently just for admin console)
@@ -30,6 +48,9 @@ class Question(Base):
     __tablename__ = "questions"
     
     id = Column(Integer, primary_key=True, index=True)
+    
+    # Category reference
+    category_id = Column(Integer, ForeignKey("categories.id"), nullable=True)
     
     # Question content (multilingual)
     question_text_en = Column(Text, nullable=False)
@@ -61,6 +82,7 @@ class Question(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
     # Relationships
+    category = relationship("Category", back_populates="questions")
     game_answers = relationship("GameAnswer", back_populates="question")
 
 
@@ -160,6 +182,11 @@ class GameSettings(Base):
     points_correct = Column(Integer, default=100)
     points_wrong = Column(Integer, default=0)
     time_bonus_max = Column(Integer, default=50)  # Max bonus points for fast answers
+    
+    # Category distribution (JSON: {"category_id": percentage, ...})
+    # Example: {"1": 50, "2": 30, "3": 20} = 50% from category 1, 30% from category 2, 20% from category 3
+    # Empty or null means equal distribution across all categories
+    category_distribution = Column(JSON, nullable=True)
     
     # Updated timestamp
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
