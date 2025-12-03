@@ -233,6 +233,7 @@ class QuizApp {
         const firstNameEl = document.getElementById('firstName');
         const lastNameEl = document.getElementById('lastName');
         const emailEl = document.getElementById('email');
+        const phoneNumberEl = document.getElementById('phoneNumber');
         
         if (!firstNameEl || !lastNameEl || !emailEl) {
             console.error('Registration form elements not found');
@@ -242,6 +243,7 @@ class QuizApp {
         const firstName = firstNameEl.value.trim();
         const lastName = lastNameEl.value.trim();
         const email = emailEl.value.trim();
+        const phoneNumber = phoneNumberEl ? phoneNumberEl.value.trim() : '';
         
         if (!firstName || !lastName || !email) {
             this.showError('Please fill in all fields');
@@ -257,7 +259,7 @@ class QuizApp {
         this.setLoading(true);
         
         try {
-            this.currentPlayer = await api.registerPlayer(firstName, lastName, email);
+            this.currentPlayer = await api.registerPlayer(firstName, lastName, email, phoneNumber);
             console.log('Player registered:', this.currentPlayer);
             this.updateRulesWithSettings();
             this.showPage('rulesPage');

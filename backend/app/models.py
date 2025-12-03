@@ -96,6 +96,7 @@ class Player(Base):
     first_name = Column(String(100), nullable=False)
     last_name = Column(String(100), nullable=False)
     email = Column(String(255), index=True, nullable=False)
+    phone_number = Column(String(20), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     
     # Relationships

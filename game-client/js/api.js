@@ -49,14 +49,15 @@ const api = {
     /**
      * Register a new player
      */
-    async registerPlayer(firstName, lastName, email) {
-        console.log('API: Registering player:', { firstName, lastName, email });
+    async registerPlayer(firstName, lastName, email, phoneNumber) {
+        console.log('API: Registering player:', { firstName, lastName, email, phoneNumber });
         return await fetchWithRetry(`${API_BASE_URL}/games/players`, {
             method: 'POST',
             body: JSON.stringify({
                 first_name: firstName,
                 last_name: lastName,
                 email: email,
+                phone_number: phoneNumber || null,
             }),
         });
     },

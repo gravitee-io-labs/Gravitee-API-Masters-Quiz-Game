@@ -841,7 +841,7 @@ class AdminApp {
         if (!tbody) return;
         
         if (this.results.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="8" class="loading">No results found</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="9" class="loading">No results found</td></tr>';
             return;
         }
         
@@ -887,10 +887,12 @@ class AdminApp {
         sorted.forEach(r => {
             const row = document.createElement('tr');
             const date = new Date(r.completed_at).toLocaleString();
+            const phoneNumber = r.player.phone_number || '-';
             row.innerHTML = `
                 <td>${r.id}</td>
                 <td>${r.player.first_name} ${r.player.last_name}</td>
                 <td>${r.player.email}</td>
+                <td>${phoneNumber}</td>
                 <td><strong>${r.total_score}</strong></td>
                 <td>${r.correct_answers}</td>
                 <td>${r.wrong_answers}</td>
@@ -962,6 +964,7 @@ class AdminApp {
         const details = document.getElementById('resultDetails');
         
         const date = new Date(result.completed_at).toLocaleString();
+        const phoneNumber = result.player.phone_number || '-';
         
         // Fetch all questions to show question text
         let questionsMap = {};
@@ -991,6 +994,10 @@ class AdminApp {
                     <div class="result-info-item">
                         <label>Email</label>
                         <strong class="truncate-text" title="${result.player.email}">${result.player.email}</strong>
+                    </div>
+                    <div class="result-info-item">
+                        <label>Phone</label>
+                        <strong class="truncate-text">${phoneNumber}</strong>
                     </div>
                     <div class="result-info-item">
                         <label>Total Score</label>

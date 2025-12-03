@@ -15,6 +15,7 @@ const translations = {
         'registration.firstName': 'First Name',
         'registration.lastName': 'Last Name',
         'registration.email': 'Email',
+        'registration.phoneNumber': 'Phone Number',
         'registration.submitButton': 'Continue',
         
         // Rules
@@ -88,6 +89,7 @@ const translations = {
         'registration.firstName': 'Prénom',
         'registration.lastName': 'Nom',
         'registration.email': 'Email',
+        'registration.phoneNumber': 'Numéro de téléphone',
         'registration.submitButton': 'Continuer',
         
         // Rules
