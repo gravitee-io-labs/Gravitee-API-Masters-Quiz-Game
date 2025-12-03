@@ -19,7 +19,7 @@ spec:
     spec:
       containers:
         - name: backend
-          image: gravitee/quiz-backend:latest  # Update with your registry
+          image: dobl1/quiz-backend:1.0.5
           imagePullPolicy: Always
           ports:
             - containerPort: 8000

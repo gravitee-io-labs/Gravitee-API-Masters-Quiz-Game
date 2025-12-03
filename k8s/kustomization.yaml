@@ -21,13 +21,13 @@ commonLabels:
 images:
   - name: gravitee/quiz-backend
     newName: dobl1/quiz-backend
-    newTag: "1.0"
+    newTag: "1.0.5"
   - name: gravitee/quiz-game-client
     newName: dobl1/quiz-game-client
-    newTag: "1.0"
+    newTag: "1.0.5"
   - name: gravitee/quiz-admin-console
     newName: dobl1/quiz-admin-console
-    newTag: "1.0"
+    newTag: "1.0.5"
   - name: gravitee/quiz-scoreboard
     newName: dobl1/quiz-scoreboard
-    newTag: "1.0"
+    newTag: "1.0.5"

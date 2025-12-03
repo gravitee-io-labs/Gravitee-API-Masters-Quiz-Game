@@ -19,7 +19,7 @@ spec:
     spec:
       containers:
         - name: admin-console
-          image: gravitee/quiz-admin-console:latest  # Update with your registry
+          image: dobl1/quiz-admin-console:1.0.5
           imagePullPolicy: Always
           ports:
             - containerPort: 80
