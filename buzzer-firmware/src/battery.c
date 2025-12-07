@@ -1,10 +1,12 @@
 /**
- * Battery monitoring implementation for 18650 Li-ion battery
+ * Battery monitoring implementation for Nice!Nano / Pro Micro nRF52840
  * 
- * Uses nRF52840 SAADC to measure battery voltage through a voltage divider.
- * Wiring: VBAT+ -> 1M resistor -> P0.31 (AIN7) -> 1M resistor -> GND
+ * Uses the nRF52840's internal VDDHDIV5 channel which measures VDDH/5.
+ * This is the correct approach for boards where the battery connects
+ * directly to VDDH (like Nice!Nano V2).
  * 
- * This gives VBAT/2 at the ADC input, keeping it within safe range.
+ * Based on ZMK's battery_nrf_vddh driver:
+ * https://github.com/zmkfirmware/zmk/blob/main/app/module/drivers/sensor/battery/battery_nrf_vddh.c
  */
 
 #include <zephyr/kernel.h>
@@ -16,179 +18,186 @@
 #include "config.h"
 #include "battery.h"
 
-/* ADC configuration from device tree */
+/* VDDHDIV5: internal channel that measures VDDH divided by 5 */
+#define VDDHDIV 5
+
+/* ADC device */
 #define ADC_NODE DT_NODELABEL(adc)
-
-#if DT_NODE_EXISTS(ADC_NODE)
 static const struct device *adc_dev = DEVICE_DT_GET(ADC_NODE);
-#else
-static const struct device *adc_dev = NULL;
-#endif
 
-/* ADC channel configuration */
-static const struct adc_channel_cfg channel_cfg = {
-    .gain = ADC_GAIN_1_6,
-    .reference = ADC_REF_INTERNAL,  /* 0.6V internal reference */
+/* ADC channel configuration for VDDHDIV5
+ * Using 1/2 gain with internal 0.6V reference:
+ * Full scale = 0.6V * 2 = 1.2V at ADC input
+ * VDDHDIV5 input = VDDH / 5
+ * So max VDDH we can measure = 1.2V * 5 = 6V (plenty for 4.2V Li-ion)
+ */
+static struct adc_channel_cfg adc_cfg = {
+    .gain = ADC_GAIN_1_2,
+    .reference = ADC_REF_INTERNAL,
     .acquisition_time = ADC_ACQ_TIME(ADC_ACQ_TIME_MICROSECONDS, 40),
-    .channel_id = BATTERY_ADC_CHANNEL,
+    .channel_id = 0,  /* VDDHDIV5 uses channel 0 */
 #if defined(CONFIG_ADC_NRFX_SAADC)
-    .input_positive = SAADC_CH_PSELP_PSELP_AnalogInput7,  /* AIN7 = P0.31 */
+    .input_positive = SAADC_CH_PSELN_PSELN_VDDHDIV5,
 #endif
 };
 
 /* ADC sample buffer and sequence */
-static int16_t adc_sample_buffer[1];
-static struct adc_sequence sequence = {
-    .buffer = adc_sample_buffer,
-    .buffer_size = sizeof(adc_sample_buffer),
+static int16_t adc_raw;
+static struct adc_sequence adc_seq = {
+    .channels = BIT(0),
+    .buffer = &adc_raw,
+    .buffer_size = sizeof(adc_raw),
     .resolution = 12,
-    .channels = BIT(BATTERY_ADC_CHANNEL),
+    .oversampling = 4,  /* 4x oversampling for better accuracy */
+    .calibrate = true,  /* Calibrate on first read */
 };
 
 /* State */
 static uint8_t battery_level = 100;
+static int32_t battery_mv = 0;
 static int64_t last_update_time = 0;
 static bool adc_initialized = false;
-
-/**
- * Convert ADC reading to battery millivolts
- * 
- * ADC config: 12-bit, 1/6 gain, 0.6V reference
- * Max measurable voltage at ADC pin: 0.6V * 6 = 3.6V
- * ADC value range: 0-4095 (12-bit)
- * 
- * Formula: V_adc = (adc_value / 4096) * 3.6V
- * V_batt = V_adc * BATTERY_DIVIDER_RATIO
- */
-static int32_t adc_to_millivolts(int16_t adc_value)
-{
-    /* Handle negative values (noise) */
-    if (adc_value < 0) {
-        adc_value = 0;
-    }
-    
-    /* Convert to millivolts at ADC input
-     * With 1/6 gain and 0.6V reference, full scale = 3.6V
-     * mv = (adc_value * 3600) / 4096
-     */
-    int32_t mv_at_adc = (adc_value * 3600) / 4096;
-    
-    /* Scale up by voltage divider ratio to get actual battery voltage */
-    int32_t mv_battery = mv_at_adc * BATTERY_DIVIDER_RATIO;
-    
-    return mv_battery;
-}
+static bool first_reading = true;
 
 /**
  * Convert battery millivolts to percentage (0-100%)
- * Uses Li-ion discharge curve approximation
+ * Uses Li-ion discharge curve based on ZMK's implementation
  */
-static uint8_t millivolts_to_percent(int32_t mv)
+static uint8_t lithium_ion_mv_to_pct(int16_t bat_mv)
 {
-    if (mv >= BATTERY_FULL_MV) {
+    /* Li-ion voltage thresholds */
+    if (bat_mv >= 4200) {
         return 100;
-    }
-    if (mv <= BATTERY_EMPTY_MV) {
+    } else if (bat_mv <= 3450) {
         return 0;
     }
-    
-    /* Li-ion discharge curve is not linear, but we use piecewise linear approximation:
-     * 4.2V - 4.0V: 100% - 80% (rapid initial drop)
-     * 4.0V - 3.7V: 80% - 50%  (gradual decline)
-     * 3.7V - 3.4V: 50% - 20%  (plateau region)
-     * 3.4V - 3.0V: 20% - 0%   (rapid end drop)
-     */
-    
-    if (mv >= 4000) {
-        /* 4.0V - 4.2V: 80% - 100% */
-        return 80 + ((mv - 4000) * 20) / (BATTERY_FULL_MV - 4000);
-    } else if (mv >= 3700) {
-        /* 3.7V - 4.0V: 50% - 80% */
-        return 50 + ((mv - 3700) * 30) / 300;
-    } else if (mv >= 3400) {
-        /* 3.4V - 3.7V: 20% - 50% */
-        return 20 + ((mv - 3400) * 30) / 300;
+
+    /* Piece-wise linear approximation of Li-ion discharge curve */
+    if (bat_mv >= 4100) {
+        /* 4100-4200mV: 90-100% */
+        return 90 + (bat_mv - 4100) / 10;
+    } else if (bat_mv >= 4000) {
+        /* 4000-4100mV: 70-90% */
+        return 70 + (bat_mv - 4000) / 5;
+    } else if (bat_mv >= 3850) {
+        /* 3850-4000mV: 40-70% */
+        return 40 + (bat_mv - 3850) * 30 / 150;
+    } else if (bat_mv >= 3700) {
+        /* 3700-3850mV: 20-40% */
+        return 20 + (bat_mv - 3700) * 20 / 150;
+    } else if (bat_mv >= 3550) {
+        /* 3550-3700mV: 5-20% */
+        return 5 + (bat_mv - 3550) * 15 / 150;
     } else {
-        /* 3.0V - 3.4V: 0% - 20% */
-        return ((mv - BATTERY_EMPTY_MV) * 20) / (3400 - BATTERY_EMPTY_MV);
+        /* 3450-3550mV: 0-5% */
+        return (bat_mv - 3450) * 5 / 100;
     }
 }
 
 int battery_init(void)
 {
-#if DT_NODE_EXISTS(ADC_NODE)
+    int rc;
+    
     if (!device_is_ready(adc_dev)) {
         printk("ADC device not ready, battery monitoring disabled\n");
-        adc_dev = NULL;
         battery_level = 100;
         return 0;  /* Non-critical, continue without ADC */
     }
 
-    int err = adc_channel_setup(adc_dev, &channel_cfg);
-    if (err) {
-        printk("ADC channel setup failed (err %d)\n", err);
-        adc_dev = NULL;
+    /* Setup ADC channel for VDDHDIV5 */
+    rc = adc_channel_setup(adc_dev, &adc_cfg);
+    if (rc) {
+        printk("ADC channel setup failed (err %d)\n", rc);
         battery_level = 100;
         return 0;  /* Non-critical */
     }
 
     adc_initialized = true;
-    printk("Battery monitoring initialized (18650 Li-ion, AIN7/P0.31)\n");
+    printk("Battery monitoring initialized (VDDHDIV5 internal channel)\n");
+    printk("ADC: 1/2 gain, internal 0.6V ref, 12-bit, 4x oversampling\n");
+    printk("VDDH range: 0-6V (divider=5), suitable for Li-ion 3.0-4.2V\n");
+    
+    /* Small delay for ADC to stabilize */
+    k_sleep(K_MSEC(10));
     
     /* Force initial battery reading */
     last_update_time = 0;
     battery_update();
     
+    printk("Initial battery: %dmV, %d%%\n", battery_mv, battery_level);
+    
     return 0;
-#else
-    printk("ADC not available in device tree, battery monitoring disabled\n");
-    battery_level = 100;
-    return 0;
-#endif
 }
 
 void battery_update(void)
 {
-    /* Rate limit updates to save power */
+    int rc;
     int64_t now = k_uptime_get();
-    if ((now - last_update_time) < BATTERY_UPDATE_INTERVAL_MS && last_update_time != 0) {
-        return;
-    }
-    last_update_time = now;
-
-    if (!adc_initialized || adc_dev == NULL) {
-        /* ADC not available, just update BLE with current level */
-        bt_bas_set_battery_level(battery_level);
-        return;
-    }
-
-    /* Perform ADC read */
-    int err = adc_read(adc_dev, &sequence);
-    if (err) {
-        printk("ADC read failed (err %d)\n", err);
-        return;
-    }
-
-    int16_t adc_value = adc_sample_buffer[0];
-    int32_t battery_mv = adc_to_millivolts(adc_value);
-    uint8_t new_level = millivolts_to_percent(battery_mv);
     
-    /* Only update if changed by at least 1% to reduce BLE notifications */
-    if (new_level != battery_level) {
-        battery_level = new_level;
-        
-        /* Update BLE Battery Service */
-        bt_bas_set_battery_level(battery_level);
-        
-        printk("Battery: %d%% (%dmV, ADC=%d)\n", battery_level, (int)battery_mv, adc_value);
-        
-        /* Low battery warning */
-        if (battery_mv <= BATTERY_LOW_MV && battery_mv > BATTERY_EMPTY_MV) {
-            printk("WARNING: Low battery! Consider charging.\n");
-        } else if (battery_mv <= BATTERY_EMPTY_MV) {
-            printk("CRITICAL: Battery empty! Please charge immediately.\n");
-        }
+    /* Skip if ADC not initialized */
+    if (!adc_initialized) {
+        return;
     }
+    
+    /* Rate limit updates (except for first reading) */
+    if (!first_reading && 
+        (now - last_update_time) < BATTERY_UPDATE_INTERVAL_MS) {
+        return;
+    }
+    
+    last_update_time = now;
+    
+    /* Perform ADC read */
+    rc = adc_read(adc_dev, &adc_seq);
+    
+    /* Disable calibration after first read */
+    adc_seq.calibrate = false;
+    
+    if (rc < 0) {
+        printk("ADC read failed (err %d)\n", rc);
+        return;
+    }
+
+    /* Convert raw ADC value to millivolts
+     * 
+     * Using adc_raw_to_millivolts() which:
+     * 1. Takes the reference voltage (600mV internal)
+     * 2. Accounts for the gain (1/2 gain -> multiply by 2)
+     * 3. Converts based on resolution (12-bit = 4096)
+     */
+    int32_t val = adc_raw;
+    rc = adc_raw_to_millivolts(adc_ref_internal(adc_dev), 
+                               adc_cfg.gain,
+                               adc_seq.resolution, 
+                               &val);
+    if (rc < 0) {
+        printk("ADC conversion failed (err %d)\n", rc);
+        return;
+    }
+
+    /* Multiply by VDDHDIV to get actual VDDH voltage */
+    battery_mv = val * VDDHDIV;
+    
+    /* Convert to percentage */
+    uint8_t new_level = lithium_ion_mv_to_pct(battery_mv);
+    
+    /* Apply some hysteresis to avoid constant small changes */
+    int diff = (int)new_level - (int)battery_level;
+    if (first_reading || diff >= 2 || diff <= -2) {
+        battery_level = new_level;
+    }
+    
+    /* Update BLE Battery Service */
+    rc = bt_bas_set_battery_level(battery_level);
+    if (rc && rc != -ENOTCONN) {
+        printk("Failed to update BAS (err %d)\n", rc);
+    }
+    
+    /* Debug output */
+    printk("Battery: raw=%d, adc_mv=%d, vddh_mv=%d, level=%d%%\n",
+           adc_raw, val, battery_mv, battery_level);
+    
+    first_reading = false;
 }
 
 uint8_t battery_get_level(void)
@@ -196,19 +205,7 @@ uint8_t battery_get_level(void)
     return battery_level;
 }
 
-/**
- * Get raw battery voltage in millivolts (for debugging)
- */
 int32_t battery_get_voltage_mv(void)
 {
-    if (!adc_initialized || adc_dev == NULL) {
-        return -1;
-    }
-    
-    int err = adc_read(adc_dev, &sequence);
-    if (err) {
-        return -1;
-    }
-    
-    return adc_to_millivolts(adc_sample_buffer[0]);
+    return battery_mv;
 }

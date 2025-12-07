@@ -47,6 +47,9 @@ static bool connection_status = false;
 /* Work queue for LED flash (can't use k_sleep in timer handler) */
 static struct k_work led_flash_work;
 
+/* Work queue for 3 quick flashes when button pressed while disconnected */
+static struct k_work led_triple_flash_work;
+
 /* Work queue for advertising restart (can't do BT ops in disconnect callback) */
 static struct k_work adv_restart_work;
 
@@ -143,20 +146,15 @@ static void button_pressed_callback(bool pressed)
 {
     printk("Button %s\n", pressed ? "PRESSED" : "RELEASED");
     
-    /* Flash buzzer LED on any button event for visual feedback */
-    if (pressed) {
-        gpio_pin_set_dt(&buzzer_led, 1);
-        printk("Buzzer LED ON\n");
-    } else {
-        gpio_pin_set_dt(&buzzer_led, 0);
-        printk("Buzzer LED OFF\n");
-    }
-    
     if (current_conn) {
         printk("Sending button state to BLE client\n");
         buzzer_service_send_button_state(pressed);
     } else {
-        printk("No BLE connection - button event not sent\n");
+        /* When disconnected: 3 quick flashes on button press */
+        if (pressed) {
+            printk("No BLE connection - triggering 3 quick flashes\n");
+            k_work_submit(&led_triple_flash_work);
+        }
     }
 }
 
@@ -182,6 +180,21 @@ static void led_flash_work_handler(struct k_work *work)
     gpio_pin_set(status_led.port, status_led.pin, 1);  /* OFF (high) */
     if (!connection_status) {
         gpio_pin_set_dt(&buzzer_led, 0);  /* OFF */
+    }
+}
+
+/* LED triple flash work handler - 3 quick flashes when button pressed while disconnected */
+static void led_triple_flash_work_handler(struct k_work *work)
+{
+    ARG_UNUSED(work);
+    
+    for (int i = 0; i < 3; i++) {
+        gpio_pin_set_dt(&buzzer_led, 1);  /* ON */
+        k_sleep(K_MSEC(100));
+        gpio_pin_set_dt(&buzzer_led, 0);  /* OFF */
+        if (i < 2) {
+            k_sleep(K_MSEC(100));  /* Gap between flashes, but not after the last one */
+        }
     }
 }
 
@@ -279,12 +292,6 @@ int main(void)
         printk("Button init failed (err %d) - continuing without button\n", err);
     }
 
-    /* Initialize battery monitoring */
-    err = battery_init();
-    if (err) {
-        printk("Battery init failed (err %d) - continuing without battery monitoring\n", err);
-    }
-
     /* Enable Bluetooth */
     err = bt_enable(NULL);
     if (err) {
@@ -304,6 +311,14 @@ int main(void)
         return err;
     }
 
+    /* Initialize battery monitoring AFTER BLE is ready
+     * This ensures bt_bas_set_battery_level() works correctly
+     */
+    err = battery_init();
+    if (err) {
+        printk("Battery init failed (err %d) - continuing without battery monitoring\n", err);
+    }
+
     /* Start advertising */
     err = start_advertising();
     if (err) {
@@ -312,6 +327,7 @@ int main(void)
 
     /* Initialize work queues and LED timer */
     k_work_init(&led_flash_work, led_flash_work_handler);
+    k_work_init(&led_triple_flash_work, led_triple_flash_work_handler);
     k_work_init(&adv_restart_work, adv_restart_work_handler);
     k_timer_init(&led_timer, led_timer_handler, NULL);
     k_timer_start(&led_timer, K_MSEC(LED_BLINK_DISCONNECTED_MS), K_MSEC(LED_BLINK_DISCONNECTED_MS));
