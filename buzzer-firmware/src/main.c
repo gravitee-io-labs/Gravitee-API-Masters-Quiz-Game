@@ -146,15 +146,18 @@ static void button_pressed_callback(bool pressed)
 {
     printk("Button %s\n", pressed ? "PRESSED" : "RELEASED");
     
+    /* Only act on button press (push down), not release */
+    if (!pressed) {
+        return;
+    }
+    
     if (current_conn) {
-        printk("Sending button state to BLE client\n");
+        printk("Sending button press to BLE client\n");
         buzzer_service_send_button_state(pressed);
     } else {
-        /* When disconnected: 3 quick flashes on button press */
-        if (pressed) {
-            printk("No BLE connection - triggering 3 quick flashes\n");
-            k_work_submit(&led_triple_flash_work);
-        }
+        /* When disconnected: 3 quick flashes */
+        printk("No BLE connection - triggering 3 quick flashes\n");
+        k_work_submit(&led_triple_flash_work);
     }
 }
 

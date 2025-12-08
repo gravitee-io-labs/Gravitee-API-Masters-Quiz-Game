@@ -37,13 +37,15 @@ static void debounce_timer_handler(struct k_timer *timer)
     
     /* Read actual button state after debounce period */
 #if DT_NODE_EXISTS(BUTTON_NODE)
+    /* gpio_pin_get_dt() already handles GPIO_ACTIVE_LOW flag:
+     * Returns 1 when button is pressed (active), 0 when released */
     int raw_value = gpio_pin_get_dt(&button);
-    bool current_state = (raw_value == 0);  // Active low: 0 = pressed
+    bool current_state = (raw_value == 1);  /* 1 = pressed (active) */
     printk("Button debounce: raw=%d, state=%s\n", raw_value, current_state ? "pressed" : "released");
 #else
     const struct device *gpio_dev = device_get_binding(BUTTON_GPIO_LABEL);
     int raw_value = gpio_pin_get(gpio_dev, BUTTON_GPIO_PIN);
-    bool current_state = (raw_value == 0);
+    bool current_state = (raw_value == 0);  /* Manual config: active low, 0 = pressed */
     printk("Button debounce: raw=%d, state=%s\n", raw_value, current_state ? "pressed" : "released");
 #endif
     

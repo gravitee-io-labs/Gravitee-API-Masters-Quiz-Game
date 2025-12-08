@@ -65,11 +65,10 @@ source ~/ncs/zephyr/zephyr-env.sh
 cd buzzer-firmware
 
 # Build for nRF52840 DK
-west build -b nrf52840dk_nrf52840
-
-# Flash to device
-west flash
+west build -b promicro_nrf52840 --pristine
 ```
+
+Copy file `buzzer-firmware\build\buzzer-firmware\zephyr.uf2` to the Pro Micro nRF52840 board.
 
 ## Configuration
 
