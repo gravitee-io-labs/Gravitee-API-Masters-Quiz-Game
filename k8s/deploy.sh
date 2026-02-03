@@ -205,9 +205,9 @@ echo "  - $REGISTRY/quiz-scoreboard:$TAG"
 echo ""
 if [ "$DEPLOY" = true ]; then
     echo "URLs (once DNS is configured):"
-    echo "  - https://apidays-2025-quiz.events.gravitee.io/game"
-    echo "  - https://apidays-2025-quiz.events.gravitee.io/admin"
-    echo "  - https://apidays-2025-quiz.events.gravitee.io/scoreboard"
-    echo "  - https://apidays-2025-quiz.events.gravitee.io/api"
+    echo "  - https://api-masters.events.gravitee.io/game"
+    echo "  - https://api-masters.events.gravitee.io/admin"
+    echo "  - https://api-masters.events.gravitee.io/scoreboard"
+    echo "  - https://api-masters.events.gravitee.io/api"
 fi
 echo ""

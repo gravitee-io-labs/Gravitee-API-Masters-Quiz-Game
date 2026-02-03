@@ -19,10 +19,10 @@ spec:
   ingressClassName: nginx
   tls:
     - hosts:
-        - apidays-2025-quiz.events.gravitee.io
+        - api-masters.events.gravitee.io
       secretName: quiz-tls-secret
   rules:
-    - host: apidays-2025-quiz.events.gravitee.io
+    - host: api-masters.events.gravitee.io
       http:
         paths:
           # Backend API - must be first for /api prefix

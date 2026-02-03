@@ -15,7 +15,7 @@ This directory contains all the Kubernetes manifests needed to deploy the Gravit
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
 │                    Ingress (HTTPS with TLS)                         │
-│              apidays-2025-quiz.events.gravitee.io                   │
+│              api-masters.events.gravitee.io                   │
 ├─────────────────────────────────────────────────────────────────────┤
 │  /api/*       │  /game/*      │  /admin/*     │  /scoreboard/*      │
 │      ↓        │      ↓        │      ↓        │       ↓             │
@@ -33,10 +33,10 @@ After deployment, the application will be available at:
 
 | Service       | URL                                                      |
 |---------------|----------------------------------------------------------|
-| Game Client   | https://apidays-2025-quiz.events.gravitee.io/game        |
-| Admin Console | https://apidays-2025-quiz.events.gravitee.io/admin       |
-| Scoreboard    | https://apidays-2025-quiz.events.gravitee.io/scoreboard  |
-| Backend API   | https://apidays-2025-quiz.events.gravitee.io/api         |
+| Game Client   | https://api-masters.events.gravitee.io/game        |
+| Admin Console | https://api-masters.events.gravitee.io/admin       |
+| Scoreboard    | https://api-masters.events.gravitee.io/scoreboard  |
+| Backend API   | https://api-masters.events.gravitee.io/api         |
 
 ## Deployment Steps
 
@@ -132,8 +132,8 @@ kubectl logs -n quiz-game -l app.kubernetes.io/name=quiz-backend
 | `DATABASE_URL`  | PostgreSQL connection string          | Set in secrets.yaml                                |
 | `SECRET_KEY`    | JWT signing key                       | Set in secrets.yaml                                |
 | `BASE_PATH`     | API base path prefix                  | "" (empty)                                         |
-| `CORS_ORIGINS`  | Allowed CORS origins                  | https://apidays-2025-quiz.events.gravitee.io       |
-| `API_BASE_URL`  | Frontend API URL                      | https://apidays-2025-quiz.events.gravitee.io/api   |
+| `CORS_ORIGINS`  | Allowed CORS origins                  | https://api-masters.events.gravitee.io       |
+| `API_BASE_URL`  | Frontend API URL                      | https://api-masters.events.gravitee.io/api   |
 
 ### Scaling
 

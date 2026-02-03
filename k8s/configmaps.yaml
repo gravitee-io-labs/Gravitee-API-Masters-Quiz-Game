@@ -8,7 +8,7 @@ metadata:
     app.kubernetes.io/part-of: gravitee-quiz
 data:
   BASE_PATH: ""
-  CORS_ORIGINS: "https://apidays-2025-quiz.events.gravitee.io"
+  CORS_ORIGINS: "https://api-masters.events.gravitee.io"
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -19,4 +19,4 @@ metadata:
     app.kubernetes.io/name: quiz-frontend
     app.kubernetes.io/part-of: gravitee-quiz
 data:
-  API_BASE_URL: "https://apidays-2025-quiz.events.gravitee.io/api"
+  API_BASE_URL: "https://api-masters.events.gravitee.io/api"
